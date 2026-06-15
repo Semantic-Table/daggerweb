@@ -10,7 +10,7 @@ export interface InventoryState {
 
 const state: InventoryState = {
   slots: Array(INVENTORY_SIZE).fill(null),
-  equipped: ITEMS.sword_rusty as WeaponDef,
+  equipped: ITEMS.fists as WeaponDef,
 };
 
 const listeners = new Set<() => void>();

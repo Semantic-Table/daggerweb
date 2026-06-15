@@ -10,6 +10,8 @@ export interface WeaponDef {
   color: string;
   /** Longueur de la lame (scale Y du mesh). */
   bladeLen: number;
+  /** Viewmodel : lame d'épée (défaut), hache, ou poings (mains nues). */
+  render?: "blade" | "axe" | "fists";
 }
 
 export interface PotionDef {
@@ -22,6 +24,10 @@ export interface PotionDef {
 export type ItemDef = WeaponDef | PotionDef;
 
 export const ITEMS: Record<string, ItemDef> = {
+  fists: {
+    kind: "weapon", id: "fists", name: "Mains nues",
+    dmg: 1, swingDur: 0.24, color: "#caa07a", bladeLen: 0, render: "fists",
+  },
   sword_rusty: {
     kind: "weapon", id: "sword_rusty", name: "Épée rouillée",
     dmg: 1, swingDur: 0.32, color: "#8a6a50", bladeLen: 1,
@@ -36,7 +42,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   axe_crude: {
     kind: "weapon", id: "axe_crude", name: "Hache grossière",
-    dmg: 3, swingDur: 0.45, color: "#7a7a7a", bladeLen: 0.7,
+    dmg: 3, swingDur: 0.45, color: "#8a8a8a", bladeLen: 0.7, render: "axe",
   },
   potion_small: {
     kind: "potion", id: "potion_small", name: "Potion (petite)",
