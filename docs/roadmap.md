@@ -12,6 +12,9 @@
 
 ## Priorités proches
 
+- [ ] **Système de compétences à l'usage** (GDD §6) — XP par type d'arme
+  (lame/hache/mains nues), bonus par palier. Plan détaillé :
+  [`todo-competences.md`](todo-competences.md). ⬅ prochaine session.
 - [ ] **Modules de donjon à connecteurs** — remplacer la grille creusée par de vrais
   modules (couloir/angle/T/salle/dead-end) chaînés par points d'accroche orientés.
   C'est le cœur technique annoncé au GDD §4.
