@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal, useFrame, useThree } from "@react-three/fiber";
-import { button, useControls } from "leva";
 import * as THREE from "three";
 import { enemyRegistry } from "../combat/enemyRegistry";
 import { getInventory, subscribeInventory } from "../combat/inventory";
@@ -13,8 +12,8 @@ import { getInventory, subscribeInventory } from "../combat/inventory";
 const REACH = 2.6;
 const CONE = 0.5; // cos de l'angle du cône (≈ 60°)
 
-// Valeurs par défaut du viewmodel (modifiables en direct via leva, Échap pour le panneau).
-const DEFAULTS = { px: 0.47, py: -0.35, pz: -0.7, rx: -0.23, ry: 0.41, rz: 0.3, scale: 1 };
+// Transform du viewmodel (position / rotation au repos / échelle).
+const VM = { px: 0.47, py: -0.35, pz: -0.7, rx: -0.23, ry: 0.41, rz: 0.3, scale: 1 };
 
 export function Sword({ onHit }: { onHit: () => void }) {
   const { camera, scene } = useThree();
@@ -31,26 +30,6 @@ export function Sword({ onHit }: { onHit: () => void }) {
       equippedRef.current = getInventory().equipped;
     });
   }, []);
-
-  // Panneau de réglage en direct + bouton "Copier la conf".
-  const copyRef = useRef<() => void>(() => {});
-  const c = useControls("Épée", {
-    px: { value: DEFAULTS.px, min: -1, max: 1, step: 0.01, label: "pos X" },
-    py: { value: DEFAULTS.py, min: -1, max: 1, step: 0.01, label: "pos Y" },
-    pz: { value: DEFAULTS.pz, min: -1.5, max: 0, step: 0.01, label: "pos Z" },
-    rx: { value: DEFAULTS.rx, min: -Math.PI, max: Math.PI, step: 0.01, label: "rot X" },
-    ry: { value: DEFAULTS.ry, min: -Math.PI, max: Math.PI, step: 0.01, label: "rot Y" },
-    rz: { value: DEFAULTS.rz, min: -Math.PI, max: Math.PI, step: 0.01, label: "rot Z" },
-    scale: { value: DEFAULTS.scale, min: 0.3, max: 2, step: 0.05 },
-    "Copier la conf": button(() => copyRef.current()),
-  });
-  copyRef.current = () => {
-    const txt =
-      `position={[${c.px}, ${c.py}, ${c.pz}]} scale={${c.scale}}\n` +
-      `REST = new THREE.Euler(${c.rx}, ${c.ry}, ${c.rz})`;
-    navigator.clipboard?.writeText(txt).catch(() => {});
-    console.log("[Épée] conf copiée :\n" + txt);
-  };
 
   // La caméra doit être dans la scène pour que ses enfants (le viewmodel) rendent.
   useEffect(() => {
@@ -93,13 +72,13 @@ export function Sword({ onHit }: { onHit: () => void }) {
       if (t.current >= 1) {
         swinging.current = false;
         t.current = 0;
-        inner.current.rotation.set(c.rx, c.ry, c.rz);
+        inner.current.rotation.set(VM.rx, VM.ry, VM.rz);
       } else {
         const s = Math.sin(t.current * Math.PI);
-        inner.current.rotation.set(c.rx - s * 2.0, c.ry + s * 0.6, c.rz + s * 0.8);
+        inner.current.rotation.set(VM.rx - s * 2.0, VM.ry + s * 0.6, VM.rz + s * 0.8);
       }
     } else {
-      inner.current.rotation.set(c.rx, c.ry, c.rz);
+      inner.current.rotation.set(VM.rx, VM.ry, VM.rz);
     }
   });
 
@@ -107,8 +86,8 @@ export function Sword({ onHit }: { onHit: () => void }) {
   const bladeH = 0.9 * weapon.bladeLen;
 
   return createPortal(
-    <group position={[c.px, c.py, c.pz]} scale={c.scale}>
-      <group ref={inner} rotation={[c.rx, c.ry, c.rz]}>
+    <group position={[VM.px, VM.py, VM.pz]} scale={VM.scale}>
+      <group ref={inner} rotation={[VM.rx, VM.ry, VM.rz]}>
         {/* Lame — couleur et longueur selon l'arme équipée */}
         <mesh position={[0, bladeH / 2, 0]}>
           <boxGeometry args={[0.06, bladeH, 0.12]} />

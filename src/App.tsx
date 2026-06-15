@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas } from "@react-three/fiber";
 import { KeyboardControls, PointerLockControls, Stats } from "@react-three/drei";
-import { Physics, useRapier } from "@react-three/rapier";
+import { Physics } from "@react-three/rapier";
 import { generateOverworld, type Entrance } from "./gen/overworldGen";
 import { generateDungeon } from "./gen/dungeonGen";
 import { Overworld } from "./components/Overworld";
@@ -14,19 +14,16 @@ import { Sword } from "./components/Sword";
 import { Enemies } from "./components/Enemies";
 import { InventoryUI } from "./components/InventoryUI";
 import { setDamageHandler } from "./combat/playerCombat";
+import { gameState } from "./combat/gameState";
 import type { CorpseHandle } from "./combat/corpseRegistry";
 
 const OVERWORLD_SEED = 1337;
 
-// Pause la simulation Rapier depuis l'intérieur du contexte Physics,
-// ce qui évite l'aliasing Rust du prop `paused` externe.
-function PhysicsPauser({ paused }: { paused: boolean }) {
-  const { world } = useRapier();
-  useFrame(() => {
-    world.timestep = paused ? 0 : 1 / 60;
-  });
-  return null;
-}
+// Pause : `<Physics paused>` gèle toute la simulation (y compris les cadavres
+// qui ragdollent). En complément, `gameState.paused` coupe l'IA dans les
+// useFrame (qui tournent même physique en pause) pour stopper les dégâts.
+// NB : régler `world.timestep` à la main ne marche pas — @react-three/rapier
+// le réécrit chaque frame.
 const MAX_HP = 100;
 const KEYMAP = [
   { name: "forward", keys: ["KeyW", "KeyZ", "ArrowUp"] },
@@ -112,6 +109,10 @@ export function App() {
     // avant de demander le lock — sinon le navigateur ignore la requête.
     setTimeout(() => controls.current?.lock(), 50);
   }, []);
+  // Pause partagée : l'IA ennemie (useFrame) la lit pour se figer menu ouvert.
+  useEffect(() => {
+    gameState.paused = invOpen;
+  }, [invOpen]);
   // Touche I : ouvrir/fermer l'inventaire (sans cadavre).
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -155,8 +156,7 @@ export function App() {
           </>
         )}
 
-        <Physics gravity={[0, -22, 0]}>
-          <PhysicsPauser paused={invOpen} />
+        <Physics gravity={[0, -22, 0]} paused={invOpen}>
           {mode === "dungeon" && dungeon ? (
             <>
               <Dungeon data={dungeon} />
@@ -210,7 +210,7 @@ export function App() {
       )}
       {!locked && everLocked && !invOpen && (
         <div className="hint" onClick={() => controls.current?.lock()}>
-          souris libérée — clique pour reprendre · règle l'épée dans le panneau ↗
+          souris libérée — clique pour reprendre
         </div>
       )}
     </KeyboardControls>

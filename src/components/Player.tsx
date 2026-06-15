@@ -4,6 +4,7 @@ import { CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/r
 import { useKeyboardControls } from "@react-three/drei";
 import * as THREE from "three";
 import { playerPos } from "../combat/playerState";
+import { gameState } from "../combat/gameState";
 
 // Joueur FPS : capsule DYNAMIQUE pilotée par Rapier (gravité + collisions réelles).
 // On lit les touches, on impose la vitesse horizontale, et la caméra suit le corps.
@@ -24,6 +25,14 @@ export function Player({ spawn }: { spawn: [number, number, number] }) {
   useFrame(() => {
     const b = body.current;
     if (!b) return;
+
+    // Menu bloquant ouvert : physique gelée (<Physics paused>), on ignore les
+    // entrées et on annule la vélocité par sécurité, sans bouger la caméra.
+    if (gameState.paused) {
+      b.setLinvel({ x: 0, y: 0, z: 0 }, false);
+      return;
+    }
+
     const { forward, back, left, right: rk, run } = get();
 
     camera.getWorldDirection(fwd);

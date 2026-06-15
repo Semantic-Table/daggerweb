@@ -18,6 +18,8 @@ export interface DungeonData {
   panels: WallPanel[];
   enemies: [number, number][]; // positions de spawn des ennemis
   spawn: [number, number, number]; // position de l'œil
+  exit: [number, number, number]; // seuil de retour vers l'overworld
+  exitRot: number; // orientation du seuil (Y)
   size: number;
 }
 
@@ -89,7 +91,20 @@ export function generateDungeon(seed: number): DungeonData {
     }
   }
 
-  const [sx, sz] = toWorld(Math.floor(size / 2), Math.floor(size / 2));
+  const cc = Math.floor(size / 2);
+  const [sx, sz] = toWorld(cc, cc);
+
+  // Sortie : seuil de retour à l'overworld, plaqué contre un mur jouxtant la
+  // case d'entrée (centre). On l'oriente comme le panneau de mur correspondant.
+  // Fallback (centre cerné de sol) : sur la case d'entrée, rot 0.
+  let exit: [number, number, number] = [sx, 0, sz];
+  let exitRot = 0;
+  for (const d of dirs) {
+    if (at(cc + d.dx, cc + d.dy)) continue;
+    exit = [sx + d.ox * 0.9, 0, sz + d.oz * 0.9];
+    exitRot = d.rot;
+    break;
+  }
 
   // Ennemis : on tire quelques cases praticables éloignées du point d'entrée.
   const pool = floors.filter(([x, z]) => Math.hypot(x - sx, z - sz) > 12);
@@ -100,5 +115,5 @@ export function generateDungeon(seed: number): DungeonData {
     enemies.push(pool.splice(idx, 1)[0]);
   }
 
-  return { floors, panels, enemies, spawn: [sx, 1.6, sz], size };
+  return { floors, panels, enemies, spawn: [sx, 1.6, sz], exit, exitRot, size };
 }
