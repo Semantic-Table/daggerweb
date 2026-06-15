@@ -3,15 +3,14 @@ import { createPortal, useFrame, useThree } from "@react-three/fiber";
 import { button, useControls } from "leva";
 import * as THREE from "three";
 import { enemyRegistry } from "../combat/enemyRegistry";
+import { getInventory, subscribeInventory } from "../combat/inventory";
 
 // Épée corps-à-corps (cf. GDD §5). Le viewmodel est rendu comme ENFANT de la
 // caméra (via createPortal) : il hérite exactement de sa transform, donc aucun
 // décalage/clip quand on bouge. Swing au clic gauche ; le hit est un balayage
 // (cône + distance), pas un raycast fin.
 
-const SWING_DUR = 0.32;
 const REACH = 2.6;
-const DMG = 1;
 const CONE = 0.5; // cos de l'angle du cône (≈ 60°)
 
 // Valeurs par défaut du viewmodel (modifiables en direct via leva, Échap pour le panneau).
@@ -25,6 +24,13 @@ export function Sword({ onHit }: { onHit: () => void }) {
   const tmp = useMemo(() => new THREE.Vector3(), []);
   const fwd = useMemo(() => new THREE.Vector3(), []);
   const toE = useMemo(() => new THREE.Vector3(), []);
+  // Arme équipée : re-render sur changement d'inventaire.
+  const equippedRef = useRef(getInventory().equipped);
+  useEffect(() => {
+    return subscribeInventory(() => {
+      equippedRef.current = getInventory().equipped;
+    });
+  }, []);
 
   // Panneau de réglage en direct + bouton "Copier la conf".
   const copyRef = useRef<() => void>(() => {});
@@ -60,6 +66,7 @@ export function Sword({ onHit }: { onHit: () => void }) {
       camera.getWorldDirection(fwd);
       fwd.y = 0;
       fwd.normalize();
+      const weapon = equippedRef.current;
       let hitAny = false;
       for (const en of enemyRegistry) {
         en.getPosition(tmp);
@@ -68,7 +75,7 @@ export function Sword({ onHit }: { onHit: () => void }) {
         if (d > REACH) continue;
         toE.normalize();
         if (fwd.dot(toE) > CONE) {
-          en.hit(toE.x, toE.z, DMG);
+          en.hit(toE.x, toE.z, weapon.dmg);
           hitAny = true;
         }
       }
@@ -80,14 +87,15 @@ export function Sword({ onHit }: { onHit: () => void }) {
 
   useFrame((_, dt) => {
     if (!inner.current) return;
+    const swingDur = equippedRef.current.swingDur;
     if (swinging.current) {
-      t.current += dt / SWING_DUR;
+      t.current += dt / swingDur;
       if (t.current >= 1) {
         swinging.current = false;
         t.current = 0;
         inner.current.rotation.set(c.rx, c.ry, c.rz);
       } else {
-        const s = Math.sin(t.current * Math.PI); // aller-retour
+        const s = Math.sin(t.current * Math.PI);
         inner.current.rotation.set(c.rx - s * 2.0, c.ry + s * 0.6, c.rz + s * 0.8);
       }
     } else {
@@ -95,17 +103,23 @@ export function Sword({ onHit }: { onHit: () => void }) {
     }
   });
 
+  const weapon = equippedRef.current;
+  const bladeH = 0.9 * weapon.bladeLen;
+
   return createPortal(
     <group position={[c.px, c.py, c.pz]} scale={c.scale}>
       <group ref={inner} rotation={[c.rx, c.ry, c.rz]}>
-        <mesh position={[0, 0.45, 0]}>
-          <boxGeometry args={[0.06, 0.9, 0.12]} />
-          <meshStandardMaterial color="#cdd2da" metalness={0.1} roughness={0.6} />
+        {/* Lame — couleur et longueur selon l'arme équipée */}
+        <mesh position={[0, bladeH / 2, 0]}>
+          <boxGeometry args={[0.06, bladeH, 0.12]} />
+          <meshStandardMaterial color={weapon.color} metalness={0.1} roughness={0.6} />
         </mesh>
+        {/* Garde */}
         <mesh position={[0, 0.02, 0]}>
           <boxGeometry args={[0.34, 0.08, 0.14]} />
           <meshStandardMaterial color="#7a6a44" roughness={1} />
         </mesh>
+        {/* Poignée */}
         <mesh position={[0, -0.16, 0]}>
           <cylinderGeometry args={[0.045, 0.045, 0.28, 6]} />
           <meshStandardMaterial color="#3a2c1c" roughness={1} />

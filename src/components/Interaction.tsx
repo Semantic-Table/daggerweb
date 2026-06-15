@@ -3,10 +3,12 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Entrance } from "../gen/overworldGen";
 import { portalRegistry } from "../portals";
+import { corpseRegistry, type CorpseHandle } from "../combat/corpseRegistry";
 
 type Target =
   | { kind: "enter"; entrance: Entrance }
   | { kind: "exit" }
+  | { kind: "corpse"; handle: CorpseHandle }
   | null;
 
 const LABELS: Record<string, string> = {
@@ -15,20 +17,16 @@ const LABELS: Record<string, string> = {
   cave: "[E] Entrer dans la grotte",
 };
 
-// Interaction "au regard" : raycast depuis le centre de l'écran vers les seuils
-// (overworld) ou proximité du point d'entrée pour ressortir (donjon).
 export function Interaction({
-  mode,
-  exitPoint,
   onLabel,
   onEnter,
   onExit,
+  onCorpse,
 }: {
-  mode: "overworld" | "dungeon";
-  exitPoint: [number, number, number] | null;
   onLabel: (label: string | null) => void;
   onEnter: (e: Entrance) => void;
   onExit: () => void;
+  onCorpse: (handle: CorpseHandle) => void;
 }) {
   const { camera } = useThree();
   const ray = useMemo(() => new THREE.Raycaster(), []);
@@ -37,21 +35,32 @@ export function Interaction({
   const lastLabel = useRef<string | null>(null);
 
   useFrame(() => {
-    let next: Target = null;
+    camera.getWorldDirection(fwd);
+    ray.set(camera.position, fwd);
+    ray.far = 7;
 
-    if (mode === "overworld") {
-      camera.getWorldDirection(fwd);
-      ray.set(camera.position, fwd);
-      ray.far = 7;
-      // On ne teste QUE les seuils enregistrés (3 meshes) -> quasi gratuit.
-      const hits = ray.intersectObjects([...portalRegistry], false);
-      const e = hits[0]?.object.userData.entrance as Entrance | undefined;
-      if (e) next = { kind: "enter", entrance: e };
-    } else if (exitPoint) {
-      const d = camera.position.distanceTo(
-        new THREE.Vector3(exitPoint[0], exitPoint[1], exitPoint[2])
-      );
-      if (d < 4) next = { kind: "exit" };
+    // Portails (entrées + sortie).
+    const portalHits = ray.intersectObjects([...portalRegistry], false);
+    const ud = portalHits[0]?.object.userData;
+    let next: Target = null;
+    if (ud?.entrance) next = { kind: "enter", entrance: ud.entrance as Entrance };
+    else if (ud?.exit) next = { kind: "exit" };
+
+    // Cadavres — on raycaste les meshes enregistrés.
+    if (!next) {
+      ray.far = 3;
+      const corpseMeshes = [...corpseRegistry].map((h) => h.mesh);
+      const corpseHits = ray.intersectObjects(corpseMeshes, true);
+      if (corpseHits.length > 0) {
+        const hit = corpseHits[0].object;
+        // Remonter jusqu'à un groupe enregistré.
+        let obj: THREE.Object3D | null = hit;
+        while (obj) {
+          const handle = [...corpseRegistry].find((h) => h.mesh === obj);
+          if (handle) { next = { kind: "corpse", handle }; break; }
+          obj = obj.parent;
+        }
+      }
     }
 
     target.current = next;
@@ -60,7 +69,11 @@ export function Interaction({
         ? LABELS[next.entrance.kind]
         : next?.kind === "exit"
           ? "[E] Remonter à la surface"
-          : null;
+          : next?.kind === "corpse"
+            ? next.handle.looted
+              ? "Déjà fouillé"
+              : "[E] Fouiller le cadavre"
+            : null;
     if (label !== lastLabel.current) {
       lastLabel.current = label;
       onLabel(label);
@@ -73,11 +86,12 @@ export function Interaction({
       const t = target.current;
       if (!t) return;
       if (t.kind === "enter") onEnter(t.entrance);
-      else onExit();
+      else if (t.kind === "exit") onExit();
+      else if (t.kind === "corpse" && !t.handle.looted) onCorpse(t.handle);
     };
     addEventListener("keydown", h);
     return () => removeEventListener("keydown", h);
-  }, [onEnter, onExit]);
+  }, [onEnter, onExit, onCorpse]);
 
   return null;
 }

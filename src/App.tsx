@@ -1,19 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { KeyboardControls, PointerLockControls, Stats } from "@react-three/drei";
-import { Physics } from "@react-three/rapier";
+import { Physics, useRapier } from "@react-three/rapier";
 import { generateOverworld, type Entrance } from "./gen/overworldGen";
 import { generateDungeon } from "./gen/dungeonGen";
 import { Overworld } from "./components/Overworld";
 import { Dungeon } from "./components/Dungeon";
+import { ExitPortal } from "./components/ExitPortal";
 import { Player } from "./components/Player";
 import { Torch } from "./components/Torch";
 import { Interaction } from "./components/Interaction";
 import { Sword } from "./components/Sword";
 import { Enemies } from "./components/Enemies";
+import { InventoryUI } from "./components/InventoryUI";
 import { setDamageHandler } from "./combat/playerCombat";
+import type { CorpseHandle } from "./combat/corpseRegistry";
 
 const OVERWORLD_SEED = 1337;
+
+// Pause la simulation Rapier depuis l'intérieur du contexte Physics,
+// ce qui évite l'aliasing Rust du prop `paused` externe.
+function PhysicsPauser({ paused }: { paused: boolean }) {
+  const { world } = useRapier();
+  useFrame(() => {
+    world.timestep = paused ? 0 : 1 / 60;
+  });
+  return null;
+}
 const MAX_HP = 100;
 const KEYMAP = [
   { name: "forward", keys: ["KeyW", "KeyZ", "ArrowUp"] },
@@ -33,6 +46,8 @@ export function App() {
   const [hitmark, setHitmark] = useState(false);
   const [hp, setHp] = useState(MAX_HP);
   const [hurt, setHurt] = useState(false);
+  const [invOpen, setInvOpen] = useState(false);
+  const [lootCorpse, setLootCorpse] = useState<CorpseHandle | null>(null);
   const controls = useRef<{ lock: () => void } | null>(null);
   const hitTimer = useRef<ReturnType<typeof setTimeout>>();
   const hurtTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -85,6 +100,34 @@ export function App() {
     setMode("overworld");
     setLabel(null);
   }, []);
+  const onCorpse = useCallback((handle: CorpseHandle) => {
+    setLootCorpse(handle);
+    setInvOpen(true);
+    document.exitPointerLock();
+  }, []);
+  const closeInv = useCallback(() => {
+    setInvOpen(false);
+    setLootCorpse(null);
+    // Petit délai pour laisser le temps à PointerLockControls de repasser enabled
+    // avant de demander le lock — sinon le navigateur ignore la requête.
+    setTimeout(() => controls.current?.lock(), 50);
+  }, []);
+  // Touche I : ouvrir/fermer l'inventaire (sans cadavre).
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.code !== "KeyI") return;
+      setInvOpen((prev) => {
+        if (prev) { setLootCorpse(null); return false; }
+        document.exitPointerLock();
+        return true;
+      });
+    };
+    addEventListener("keydown", h);
+    return () => removeEventListener("keydown", h);
+  }, []);
+  const onHeal = useCallback((amount: number) => {
+    setHp((prev) => Math.min(MAX_HP, prev + amount));
+  }, []);
 
   return (
     <KeyboardControls map={KEYMAP}>
@@ -113,9 +156,11 @@ export function App() {
         )}
 
         <Physics gravity={[0, -22, 0]}>
+          <PhysicsPauser paused={invOpen} />
           {mode === "dungeon" && dungeon ? (
             <>
               <Dungeon data={dungeon} />
+              <ExitPortal pos={dungeon.exit} rot={dungeon.exitRot} />
               <Enemies key={`enemies-${dungeonSeed}`} spawns={dungeon.enemies} />
             </>
           ) : (
@@ -126,16 +171,11 @@ export function App() {
 
         <Sword onHit={onHit} />
 
-        <Interaction
-          mode={mode}
-          exitPoint={mode === "dungeon" && dungeon ? dungeon.spawn : null}
-          onLabel={setLabel}
-          onEnter={onEnter}
-          onExit={onExit}
-        />
+        <Interaction onLabel={setLabel} onEnter={onEnter} onExit={onExit} onCorpse={onCorpse} />
 
         <PointerLockControls
           ref={controls as never}
+          enabled={!invOpen}
           onLock={() => {
             setLocked(true);
             setEverLocked(true);
@@ -145,6 +185,8 @@ export function App() {
 
         <Stats />
       </Canvas>
+
+      <InventoryUI open={invOpen} onClose={closeInv} corpse={lootCorpse} onHeal={onHeal} />
 
       <div className="crosshair" />
       {hitmark && <div className="hitmarker" />}
@@ -166,7 +208,7 @@ export function App() {
           </p>
         </div>
       )}
-      {!locked && everLocked && (
+      {!locked && everLocked && !invOpen && (
         <div className="hint" onClick={() => controls.current?.lock()}>
           souris libérée — clique pour reprendre · règle l'épée dans le panneau ↗
         </div>
