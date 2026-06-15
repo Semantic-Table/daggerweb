@@ -1,0 +1,73 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; overflow: hidden; background: #0a0a0c; }
+/* Agrandissement net du rendu basse résolution -> pixels carrés (GDD §7). */
+canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.overlay {
+  position: fixed; inset: 0; display: flex;
+  align-items: center; justify-content: center;
+  flex-direction: column; gap: 1rem;
+  font-family: ui-monospace, "Courier New", monospace;
+  color: #c8c8b4; background: rgba(8, 8, 10, 0.85);
+  text-align: center; cursor: pointer; z-index: 10;
+}
+.overlay h1 { font-size: 1.6rem; letter-spacing: 0.15em; color: #d8cba0; }
+.overlay p { font-size: 0.85rem; opacity: 0.7; max-width: 28rem; line-height: 1.6; }
+
+.crosshair {
+  position: fixed; top: 50%; left: 50%;
+  width: 4px; height: 4px; margin: -2px 0 0 -2px;
+  background: #d8cba0; opacity: 0.6; z-index: 5; pointer-events: none;
+}
+
+/* Flash rouge plein écran quand le joueur encaisse un coup. */
+.hurt {
+  position: fixed; inset: 0; z-index: 4; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(180, 20, 20, 0.55) 100%);
+}
+
+/* Barre de vie en bas à gauche. */
+.healthbar {
+  position: fixed; bottom: 1.2rem; left: 1.2rem;
+  width: 220px; height: 16px; z-index: 5;
+  background: rgba(8, 8, 10, 0.6); border: 1px solid rgba(216, 203, 160, 0.4);
+  pointer-events: none;
+}
+.healthbar-fill {
+  height: 100%; background: linear-gradient(#b34d4d, #7a2b2b);
+  transition: width 0.15s;
+}
+
+/* Rappel discret quand la souris est libérée (ne masque pas la scène). */
+.hint {
+  position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%);
+  font-family: ui-monospace, "Courier New", monospace;
+  color: #c8c8b4; font-size: 0.8rem; opacity: 0.6;
+  background: rgba(8, 8, 10, 0.6); padding: 0.4rem 0.8rem; border-radius: 4px;
+  z-index: 5; cursor: pointer;
+}
+
+/* Marqueur de touche : un "✕" rouge bref quand un coup porte. */
+.hitmarker {
+  position: fixed; top: 50%; left: 50%;
+  width: 16px; height: 16px; margin: -8px 0 0 -8px;
+  z-index: 6; pointer-events: none;
+}
+.hitmarker::before, .hitmarker::after {
+  content: ""; position: absolute; left: 7px; top: 0;
+  width: 2px; height: 16px; background: #ff5a5a;
+}
+.hitmarker::before { transform: rotate(45deg); }
+.hitmarker::after { transform: rotate(-45deg); }
+
+.prompt {
+  position: fixed; bottom: 18%; left: 50%; transform: translateX(-50%);
+  font-family: ui-monospace, "Courier New", monospace;
+  color: #e0d4a8; font-size: 1rem; letter-spacing: 0.08em;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9); z-index: 5;
+  pointer-events: none; transition: opacity 0.15s;
+}
