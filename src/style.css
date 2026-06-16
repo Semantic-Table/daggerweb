@@ -212,6 +212,118 @@ body {
 .hitmarker::before { transform: rotate(45deg); }
 .hitmarker::after  { transform: rotate(-45deg); }
 
+/* Coups critiques : hitmarker rouge plus gros */
+.hitmarker--crit {
+  width: 24px; height: 24px; margin: -12px 0 0 -12px;
+  z-index: 7;
+}
+.hitmarker--crit::before,
+.hitmarker--crit::after {
+  width: 3px; height: 24px; background: #c93a3a;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+/* Montée d'attribut : notification en haut à droite */
+.attr-up {
+  position: fixed; top: 1.5rem; right: 1.5rem;
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  background: var(--panel);
+  border: 2px solid var(--frame-lo);
+  border-top-color: var(--frame-hi);
+  border-left-color: var(--frame-hi);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+  animation: attr-up-fade 0.2s ease-out, attr-up-pulse 0.7s steps(8, end);
+}
+.attr-up-abbr {
+  font-family: "Pixelify Sans", sans-serif;
+  font-weight: 700; font-size: 1.1rem;
+  color: var(--gold);
+  text-shadow: 1px 1px 0 var(--frame-lo);
+}
+.attr-up-label {
+  font-family: "Pixelify Sans", sans-serif;
+  font-size: 1rem;
+  color: var(--xp);
+  letter-spacing: 0.04em;
+}
+
+/* Niveau d'attribut dans l'écran Personnage */
+.grim-attr-level {
+  font-size: 0.85rem;
+  color: var(--xp);
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+
+@keyframes attr-up-fade {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes attr-up-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(2) drop-shadow(0 0 4px var(--gold)); }
+}
+
+/* Sélecteur de profil (premier lancement) */
+.profile-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin: 1rem 0;
+}
+
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.2rem;
+  background: var(--panel2);
+  border: 2px solid var(--frame-lo);
+  border-top-color: var(--frame-hi);
+  border-left-color: var(--frame-hi);
+  box-shadow: 0 0 0 1px var(--frame), 0 4px 8px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.profile-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 1px var(--frame), 0 6px 12px rgba(0, 0, 0, 0.5);
+}
+
+.profile-name {
+  font-family: "Pixelify Sans", sans-serif;
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: var(--gold);
+  letter-spacing: 0.1em;
+}
+
+.profile-attrs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+}
+
+.profile-attr {
+  font-size: 0.85rem;
+  color: var(--inkDim);
+  letter-spacing: 0.03em;
+}
+
+.profile-note {
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--inkDim);
+  margin-top: 1.5rem;
+  opacity: 0.8;
+}
+
 /* ── Invite d'interaction au regard ──────────────────────────────────────*/
 .prompt {
   position: fixed; bottom: 18%; left: 50%; transform: translateX(-50%);

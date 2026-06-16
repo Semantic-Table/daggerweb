@@ -4,7 +4,8 @@ import * as THREE from "three";
 import { enemyRegistry } from "../combat/enemyRegistry";
 import { getInventory, subscribeInventory } from "../combat/inventory";
 import { gainXp, effectiveDmg, effectiveSwingDur } from "../combat/skills";
-import { SWORD_REACH, SWORD_FIST_REACH, SWORD_CONE, SKILL_XP_PER_HIT } from "../config";
+import { gainAttrPractice, SKILL_GOV, meleeMult, critChance, useStamina, maxStamina } from "../combat/character";
+import { SWORD_REACH, SWORD_FIST_REACH, SWORD_CONE, SKILL_XP_PER_HIT, ATTACK_STAMINA_COST } from "../config";
 
 // Arme corps-à-corps (cf. GDD §5). Le viewmodel est rendu comme ENFANT de la
 // caméra (via createPortal) : il hérite exactement de sa transform, donc aucun
@@ -33,7 +34,12 @@ function FistMesh({ color }: { color: string }) {
   );
 }
 
-export function Sword({ onHit }: { onHit: () => void }) {
+interface SwordProps {
+  onHit: () => void;
+  onCrit?: () => void;
+}
+
+export function Sword({ onHit, onCrit }: SwordProps) {
   const { camera, scene } = useThree();
   const inner = useRef<THREE.Group>(null);
   const swinging = useRef(false);
@@ -57,6 +63,14 @@ export function Sword({ onHit }: { onHit: () => void }) {
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (e.button !== 0 || document.pointerLockElement == null || swinging.current) return;
+      
+      // Vérifier si on a assez de vigueur pour attaquer
+      const staminaCost = ATTACK_STAMINA_COST * maxStamina();
+      if (!useStamina(staminaCost)) {
+        // Pas assez de vigueur, ne pas attaquer
+        return;
+      }
+      
       swinging.current = true;
       t.current = 0;
 
@@ -65,9 +79,10 @@ export function Sword({ onHit }: { onHit: () => void }) {
       fwd.normalize();
       const weapon = equippedRef.current;
       const reach = weapon.render === "fists" ? SWORD_FIST_REACH : SWORD_REACH;
-      // Dégâts modulés par la compétence de la catégorie (lecture à la volée —
+      // Dégâts modulés par la compétence ET la FORCE (lecture à la volée —
       // on ne mute jamais la def d'arme).
-      const dmg = effectiveDmg(weapon);
+      const baseDmg = effectiveDmg(weapon);
+      const dmg = baseDmg * meleeMult();
       let hitAny = false;
       for (const en of enemyRegistry) {
         en.getPosition(tmp);
@@ -76,9 +91,15 @@ export function Sword({ onHit }: { onHit: () => void }) {
         if (d > reach) continue;
         toE.normalize();
         if (fwd.dot(toE) > SWORD_CONE) {
-          en.hit(toE.x, toE.z, dmg);
+          // Vérifier si coup critique
+          const isCrit = Math.random() < critChance();
+          const finalDmg = isCrit ? dmg * 1.5 : dmg;
+          en.hit(toE.x, toE.z, finalDmg);
           // XP au coup CONFIRMÉ, par ennemi touché (cf. GDD §6).
           gainXp(weapon.category, SKILL_XP_PER_HIT);
+          // Pratique de l'attribut gouverneur (cf. docs/roadmap-attributs.md)
+          gainAttrPractice(SKILL_GOV[weapon.category], 1);
+          if (isCrit && onCrit) onCrit();
           hitAny = true;
         }
       }

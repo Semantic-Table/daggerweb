@@ -1,15 +1,18 @@
 import type { ItemDef, WeaponDef } from "../items/itemDefs";
 import { ITEMS } from "../items/itemDefs";
+import { carryMax, getCurrentWeight } from "./character";
 
-export const INVENTORY_SIZE = 8;
+// Inventaire illimité en nombre d'items, mais limité par le poids (FORCE).
+// Plus de limite de slots, on porte autant que carryMax() le permet.
 
 export interface InventoryState {
-  slots: (ItemDef | null)[];
+  /** Tableau dynamique d'items (pas de limite de taille). */
+  items: ItemDef[];
   equipped: WeaponDef;
 }
 
 const state: InventoryState = {
-  slots: Array(INVENTORY_SIZE).fill(null),
+  items: [],
   equipped: ITEMS.fists as WeaponDef,
 };
 
@@ -24,48 +27,85 @@ export function subscribeInventory(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
-function notify() {
+function notify(): void {
   for (const fn of listeners) fn();
 }
 
-/** Ajoute un item dans le premier slot libre. Retourne true si réussi. */
+/** Calcule le poids total actuel de l'inventaire. */
+export function getTotalWeight(): number {
+  return getCurrentWeight(state.items);
+}
+
+/** Calcule le poids restant disponible. */
+export function getRemainingWeight(): number {
+  return carryMax() - getTotalWeight();
+}
+
+/** Vérifie si on peut ajouter un item (en poids). */
+function canAddItem(item: ItemDef): boolean {
+  return getTotalWeight() + item.weight <= carryMax();
+}
+
+/** Ajoute un item à l'inventaire si la charge le permet. Retourne true si réussi. */
 export function pickupItem(item: ItemDef): boolean {
-  const idx = state.slots.findIndex((s) => s === null);
-  if (idx === -1) return false;
-  state.slots[idx] = item;
+  if (!canAddItem(item)) return false;
+  state.items.push(item);
   notify();
   return true;
 }
 
-/** Équipe l'arme dans le slot donné (si c'est bien une arme). */
-export function equipWeapon(slotIdx: number): void {
-  const item = state.slots[slotIdx];
+/** Équipe l'arme à l'index donné (si c'est bien une arme). */
+export function equipWeapon(index: number): void {
+  const item = state.items[index];
   if (!item || item.kind !== "weapon") return;
   state.equipped = item;
   notify();
 }
 
-/** Déséquipe l'arme courante : on repasse à mains nues (cf. paper-doll Grimoire). */
+/** Déséquipe l'arme courante : on repasse à mains nues. */
 export function unequipWeapon(): void {
   if (state.equipped.id === "fists") return;
   state.equipped = ITEMS.fists as WeaponDef;
   notify();
 }
 
-/** Consomme une potion du slot donné. Retourne les PV soignés (0 si pas une potion). */
-export function consumePotion(slotIdx: number): number {
-  const item = state.slots[slotIdx];
+/** Consomme une potion à l'index donné. Retourne les PV soignés (0 si pas une potion). */
+export function consumePotion(index: number): number {
+  const item = state.items[index];
   if (!item || item.kind !== "potion") return 0;
-  state.slots[slotIdx] = null;
+  state.items.splice(index, 1);
   notify();
   return item.heal;
 }
 
-/** Retire un item d'un slot (ex: transfert depuis cadavre). */
-export function removeFromSlot(slotIdx: number): ItemDef | null {
-  const item = state.slots[slotIdx];
-  if (!item) return null;
-  state.slots[slotIdx] = null;
+/** Retire un item de l'inventaire (par index). */
+export function removeItem(index: number): ItemDef | null {
+  if (index < 0 || index >= state.items.length) return null;
+  const [item] = state.items.splice(index, 1);
   notify();
   return item;
+}
+
+/** Retire un item spécifique (par référence). Retourne true si trouvé et retiré. */
+export function removeItemByReference(item: ItemDef): boolean {
+  const index = state.items.findIndex((it) => it === item);
+  if (index === -1) return false;
+  state.items.splice(index, 1);
+  notify();
+  return true;
+}
+
+// ============================================================================
+// Utilitaires pour la compatibilité avec l'ancien système
+// ============================================================================
+
+/** Retourne les items sous forme de tableau avec null pour les slots vides.
+ * (Pour compatibilité avec l'ancien système de slots si nécessaire) */
+export function getItemsAsSlots(): (ItemDef | null)[] {
+  return [...state.items]; // Pas de null, juste les items existants
+}
+
+/** Retourne le nombre d'items dans l'inventaire. */
+export function getItemCount(): number {
+  return state.items.length;
 }

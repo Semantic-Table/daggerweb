@@ -6,6 +6,8 @@ import {
   unequipWeapon,
   consumePotion,
   pickupItem,
+  getTotalWeight,
+  getItemCount,
 } from "../combat/inventory";
 import {
   getSkills,
@@ -14,11 +16,27 @@ import {
   skillBonus,
   CATEGORIES,
   CATEGORY_LABEL,
-  type WeaponCategory,
 } from "../combat/skills";
+import {
+  carryMax,
+  maxMagicka,
+  maxStamina,
+  currentStamina,
+  staminaPercent,
+  getAttr,
+  getCharacter,
+  attrLevel,
+  attrLevelInfo,
+  characterLevel,
+  ATTR_LABEL,
+  ATTR_ABBR,
+  SKILL_GOV,
+  PROFILES,
+  saveProfile,
+  type CharacterProfile,
+} from "../combat/character";
 import type { CorpseHandle } from "../combat/corpseRegistry";
 import type { ItemDef, WeaponDef } from "../items/itemDefs";
-import { INV_MAX_WEIGHT } from "../config";
 import {
   THEME_ORDER,
   THEME_LABEL,
@@ -85,9 +103,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "map", label: "CARTE" },
 ];
 
-/* Attribut gouverneur par catégorie — PLACEHOLDER : les attributs ne sont pas
-   encore en jeu (cf. docs/todo-ui-rpg.md). */
-const SKILL_GOV: Record<WeaponCategory, string> = { blade: "FOR", axe: "FOR", unarmed: "AGI" };
+// Attribut gouverneur par catégorie — maintenant géré par character.ts
 
 interface Props {
   open: boolean;
@@ -103,6 +119,23 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
   const [, forceUpdate] = useReducer((n: number) => n + 1, 0);
   useEffect(() => subscribeInventory(forceUpdate), []);
   useEffect(() => subscribeSkills(forceUpdate), []);
+  
+  // Vérifier si un profil a déjà été choisi (pour l'affichage du sélecteur)
+  const [showProfileSelect, setShowProfileSelect] = useState(false);
+  useEffect(() => {
+    // Vérifier si c'est le premier lancement (pas de profil sauvegardé)
+    const hasProfile = localStorage.getItem("dungeonFps_profile");
+    if (!hasProfile && open) {
+      setShowProfileSelect(true);
+    }
+  }, [open]);
+  
+  const chooseProfile = (profile: CharacterProfile) => {
+    saveProfile(profile);
+    setShowProfileSelect(false);
+    // Recharger la page pour appliquer le nouveau profil
+    window.location.reload();
+  };
 
   const [tab, setTab] = useState<Tab>("inv");
   const [theme, setTheme] = useState<ThemeKey>(loadTheme);
@@ -134,20 +167,64 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
 
   if (!open) return null;
 
+  // ========================================================================
+  // Sélecteur de profil (premier lancement)
+  // ========================================================================
+  if (showProfileSelect) {
+    return (
+      <div className="grim-overlay" data-theme="donjon" onClick={() => setShowProfileSelect(false)}>
+        <div className="grim-cabinet" onClick={(e) => e.stopPropagation()}>
+          <div className="grim-titlebar">
+            <div className="grim-id">
+              <div className="grim-crest" />
+              <div className="grim-id-text">
+                <div className="grim-title">Choisis ton destin</div>
+                <div className="grim-sub">Sélectionne un profil de départ</div>
+              </div>
+            </div>
+          </div>
+          <div className="grim-content" style={{ height: "auto", padding: "2rem" }}>
+            <div className="profile-select-grid">
+              {Object.entries(PROFILES).map(([key, profile]) => (
+                <button
+                  key={key}
+                  className="profile-card"
+                  onClick={() => chooseProfile(key as CharacterProfile)}
+                >
+                  <div className="profile-name">{profile.label}</div>
+                  <div className="profile-attrs">
+                    {Object.entries(profile.attrs).map(([attr, value]) => (
+                      <span key={attr} className="profile-attr">
+                        {attr}: {value}
+                      </span>
+                    ))}
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="profile-note">
+              Tu pourras toujours progresser dans tous les attributs en jouant.
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const inv = getInventory();
   const equipped = inv.equipped;
   const hasWeaponEquipped = equipped.id !== "fists";
 
-  // Slots remplis (avec index réel), filtrés par catégorie.
+  // Items filtrés par catégorie (avec index réel).
   const catDef = CATS.find((c) => c.key === cat)!;
-  const filled = inv.slots
-    .map((item, slot) => ({ item, slot }))
-    .filter((e): e is { item: ItemDef; slot: number } => e.item !== null)
+  const filled = inv.items
+    .map((item, index) => ({ item, index }))
     .filter((e) => !catDef.kinds || catDef.kinds.includes(e.item.kind));
 
-  const sel = selSlot != null ? inv.slots[selSlot] : null;
+  const sel = selSlot != null ? inv.items[selSlot] : null;
   const selIsEquipped = sel != null && sel === equipped;
-  const totalWt = inv.slots.reduce((a, it) => a + (it?.weight ?? 0), 0);
+  const totalWt = getTotalWeight();
+  const maxWt = carryMax();
 
   const equipSel = () => {
     if (selSlot == null || !sel || sel.kind !== "weapon") return;
@@ -229,12 +306,12 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
                   <div className="grim-encart">
                     <div className="grim-encart-head">
                       <span className="grim-dim">CHARGE</span>
-                      <span className="grim-ink">{totalWt} / {INV_MAX_WEIGHT}</span>
+                      <span className="grim-ink">{totalWt} / {Math.floor(maxWt)}</span>
                     </div>
                     <div className="grim-gauge grim-gauge--sm">
                       <div
                         className="grim-gauge-fill"
-                        style={{ width: `${Math.min(100, (totalWt / INV_MAX_WEIGHT) * 100)}%` }}
+                        style={{ width: `${Math.min(100, (totalWt / maxWt) * 100)}%` }}
                       />
                     </div>
                   </div>
@@ -274,7 +351,7 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
                   </div>
                 )}
                 <div className="grim-invhead">
-                  <span className="grim-invtitle">SACOCHE · {filled.length} objets</span>
+                  <span className="grim-invtitle">SACOCHE · {getItemCount()} objets</span>
                   <div className="grim-minis">
                     <button
                       className={`grim-mini${view === "grid" ? " grim-mini--active" : ""}`}
@@ -295,20 +372,20 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
                     <div className="grim-empty">Aucun objet dans cette catégorie.</div>
                   ) : view === "grid" ? (
                     <div className="grim-itemgrid">
-                      {filled.map(({ item, slot }) => {
+                      {filled.map(({ item, index }) => {
                         const eq = item === equipped;
                         return (
                           <div
-                            key={slot}
-                            className={`grim-slot${selSlot === slot ? " grim-slot--sel" : ""}${
+                            key={index}
+                            className={`grim-slot${selSlot === index ? " grim-slot--sel" : ""}${
                               eq ? " grim-slot--eq" : ""
                             }`}
                             draggable
                             onDragStart={(e) => {
-                              dragSlot.current = slot;
+                              dragSlot.current = index;
                               e.dataTransfer.effectAllowed = "move";
                             }}
-                            onClick={() => setSelSlot(slot)}
+                            onClick={() => setSelSlot(index)}
                             title={item.name}
                           >
                             <span style={itemIcon(item, 32)} />
@@ -320,18 +397,18 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
                     </div>
                   ) : (
                     <div className="grim-itemlist">
-                      {filled.map(({ item, slot }) => {
+                      {filled.map(({ item, index }) => {
                         const eq = item === equipped;
                         return (
                           <div
-                            key={slot}
-                            className={`grim-row${selSlot === slot ? " grim-row--sel" : ""}`}
+                            key={index}
+                            className={`grim-row${selSlot === index ? " grim-row--sel" : ""}`}
                             draggable
                             onDragStart={(e) => {
-                              dragSlot.current = slot;
+                              dragSlot.current = index;
                               e.dataTransfer.effectAllowed = "move";
                             }}
-                            onClick={() => setSelSlot(slot)}
+                            onClick={() => setSelSlot(index)}
                           >
                             <span style={itemIcon(item, 22)} />
                             <span className="grim-row-name">{item.name}</span>
@@ -437,7 +514,7 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
                       <div className="grim-skillrow-top">
                         <span className={`grim-tag ${isEq ? "grim-tag--pri" : "grim-tag--min"}`} />
                         <span className="grim-skill-name">{CATEGORY_LABEL[c]}</span>
-                        <span className="grim-gov" title="Attribut gouverneur (à venir)">
+                        <span className="grim-gov" title="Attribut gouverneur">
                           {SKILL_GOV[c]}
                         </span>
                         <div className="grim-track grim-track--sk">
@@ -513,19 +590,19 @@ function Equip({
 }) {
   // Sac « équipable » = armes en inventaire non équipées (seules les armes le sont
   // pour l'instant ; armures à venir, cf. docs/todo-ui-rpg.md).
-  const bag = inv.slots
-    .map((item, slot) => ({ item, slot }))
+  const bag = inv.items
+    .map((item, index) => ({ item, index }))
     .filter(
-      (e): e is { item: ItemDef; slot: number } =>
-        e.item !== null && e.item.kind === "weapon" && e.item !== equipped
+      (e): e is { item: ItemDef; index: number } =>
+        e.item.kind === "weapon" && e.item !== equipped
     );
 
   const dropWeapon = (e: React.DragEvent) => {
     e.preventDefault();
-    const slot = dragSlot.current;
-    if (slot == null) return;
-    const it = inv.slots[slot];
-    if (it && it.kind === "weapon") equipWeapon(slot);
+    const index = dragSlot.current;
+    if (index == null) return;
+    const it = inv.items[index];
+    if (it && it.kind === "weapon") equipWeapon(index);
   };
 
   return (
@@ -537,16 +614,16 @@ function Equip({
           {bag.length === 0 ? (
             <div className="grim-empty">Aucune arme à équiper.</div>
           ) : (
-            bag.map(({ item, slot }) => (
+            bag.map(({ item, index }) => (
               <div
-                key={slot}
+                key={index}
                 className="grim-bagitem"
                 draggable
                 onDragStart={(e) => {
-                  dragSlot.current = slot;
+                  dragSlot.current = index;
                   e.dataTransfer.effectAllowed = "move";
                 }}
-                onClick={() => equipWeapon(slot)}
+                onClick={() => equipWeapon(index)}
                 title={`Équiper — ${item.name}`}
               >
                 <span style={itemIcon(item, 22)} />
@@ -617,34 +694,47 @@ function Equip({
   );
 }
 
-/* Attributs — PLACEHOLDER (non modélisés). */
-const ATTRS: { abbr: string; name: string }[] = [
-  { abbr: "FOR", name: "Force" },
-  { abbr: "INT", name: "Intelligence" },
-  { abbr: "VOL", name: "Volonté" },
-  { abbr: "AGI", name: "Agilité" },
-  { abbr: "END", name: "Endurance" },
-  { abbr: "CHA", name: "Charisme" },
-  { abbr: "VIT", name: "Vitesse" },
-  { abbr: "CHN", name: "Chance" },
-];
-
 function Stats({ hp, maxHp }: { hp: number; maxHp: number }) {
+  // Valeurs des attributs (réelles, plus de placeholders)
+  const attrs = ATTR_ABBR.map((abbr) => {
+    const value = getAttr(abbr);
+    const level = attrLevel(abbr);
+    const info = attrLevelInfo(getCharacter().practice[abbr]);
+    return {
+      abbr,
+      name: ATTR_LABEL[abbr],
+      value,
+      level,
+      xp: info.into,
+      need: info.need,
+    };
+  });
+
   return (
     <div className="grim-stats">
       <div className="grim-col">
         <div className="grim-coltitle">ATTRIBUTS</div>
         <div className="grim-attrgrid">
-          {ATTRS.map((a) => (
+          {attrs.map((a) => (
             <div key={a.abbr} className="grim-attr">
               <div className="grim-attr-abbr">{a.abbr}</div>
               <div className="grim-attr-body">
                 <div className="grim-attr-line">
                   <span className="grim-ink">{a.name}</span>
-                  <span className="grim-attr-val">—</span>
+                  <span className="grim-attr-val">{a.value}</span>
                 </div>
+                {/* Niveau de l'attribut (Phase 2) */}
+                {a.level > 0 && (
+                  <div className="grim-attr-level">
+                    Nv {a.level} ({a.xp}/{a.need} XP)
+                  </div>
+                )}
+                {/* Barre de progression vers le prochain palier */}
                 <div className="grim-gauge grim-gauge--sm">
-                  <div className="grim-gauge-fill" style={{ width: "0%" }} />
+                  <div
+                    className="grim-gauge-fill"
+                    style={{ width: `${((a.value - 30) / 70) * 100}%` }}
+                  />
                 </div>
               </div>
             </div>
@@ -656,18 +746,26 @@ function Stats({ hp, maxHp }: { hp: number; maxHp: number }) {
           <div className="grim-portrait">portrait</div>
           <div className="grim-charinfo">
             <div className="grim-detail-name grim-detail-name--left">Errant des Marches</div>
-            <div className="grim-ink">Race · à venir</div>
-            <div className="grim-ink">Classe · sans classe</div>
-            <div className="grim-ink">Niveau · à venir</div>
+            {/* Afficher le profil sélectionné */}
+            {(() => {
+              const profileKey = localStorage.getItem("dungeonFps_profile") as CharacterProfile | null;
+              const profile = profileKey ? PROFILES[profileKey] : PROFILES.neutre;
+              return (
+                <>
+                  <div className="grim-ink">Classe · {profile.label}</div>
+                  <div className="grim-ink">Niveau · {characterLevel()}</div>
+                </>
+              );
+            })()}
           </div>
         </div>
         <div className="grim-rule" />
-        {/* Points de vie : RÉEL. Le reste est placeholder. */}
+        {/* Points de vie, Magie, Vigueur et Charge - TOUT RÉEL ! */}
         <Bar label="Points de vie" val={`${hp} / ${maxHp}`} pct={(hp / maxHp) * 100} />
-        <Bar label="Magie" val="—" pct={0} />
-        <Bar label="Vigueur" val="—" pct={0} />
-        <Bar label="Expérience" val="—" pct={0} />
-        <div className="grim-note">Attributs, magie et progression de niveau à venir.</div>
+        <Bar label="Magie" val={`${Math.floor(maxMagicka())} / ${Math.floor(maxMagicka())}`} pct={100} />
+        <Bar label="Vigueur" val={`${Math.floor(currentStamina())} / ${Math.floor(maxStamina())}`} pct={staminaPercent()} />
+        <Bar label="Charge" val={`${Math.floor(getTotalWeight())} / ${Math.floor(carryMax())}`} pct={(getTotalWeight() / carryMax()) * 100} />
+        <div className="grim-note">Attributs, magie ET vigueur réels !</div>
       </div>
     </div>
   );

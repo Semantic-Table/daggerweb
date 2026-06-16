@@ -17,8 +17,10 @@ import { setDamageHandler } from "./combat/playerCombat";
 import { getInventory, subscribeInventory } from "./combat/inventory";
 import { getSkills, subscribeSkills, levelInfo, skillBonus, CATEGORY_LABEL } from "./combat/skills";
 import { gameState } from "./combat/gameState";
+import { maxHp, subscribeCharacter, setOnAttrLevelUp, ATTR_LABEL } from "./combat/character";
+import type { Attr } from "./combat/character";
 import type { CorpseHandle } from "./combat/corpseRegistry";
-import { PLAYER_MAX_HP, PLAYER_IFRAMES_MS } from "./config";
+import { PLAYER_IFRAMES_MS } from "./config";
 
 const OVERWORLD_SEED = 1337;
 
@@ -40,10 +42,16 @@ export function App() {
   const [locked, setLocked] = useState(false);
   const [everLocked, setEverLocked] = useState(false);
   const [hitmark, setHitmark] = useState(false);
-  const [hp, setHp] = useState(PLAYER_MAX_HP);
+  const [hp, setHp] = useState(maxHp());
   const [hurt, setHurt] = useState(false);
   const [invOpen, setInvOpen] = useState(false);
   const [lootCorpse, setLootCorpse] = useState<CorpseHandle | null>(null);
+  // Feedback pour les coups critiques
+  const [crit, setCrit] = useState(false);
+  const critTimer = useRef<ReturnType<typeof setTimeout>>();
+  // Feedback pour les montées d'attribut
+  const [attrUp, setAttrUp] = useState<Attr | null>(null);
+  const attrUpTimer = useRef<ReturnType<typeof setTimeout>>();
   const controls = useRef<{ lock: () => void } | null>(null);
   const hitTimer = useRef<ReturnType<typeof setTimeout>>();
   const hurtTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -54,11 +62,20 @@ export function App() {
   const [levelup, setLevelup] = useState(false);
   const lastLevel = useRef(0);
   const levelupTimer = useRef<ReturnType<typeof setTimeout>>();
+  const lastMaxHp = useRef(maxHp());
 
+  // Feedback : hitmarker (touche normale)
   const onHit = useCallback(() => {
     setHitmark(true);
     clearTimeout(hitTimer.current);
     hitTimer.current = setTimeout(() => setHitmark(false), 110);
+  }, []);
+
+  // Feedback : coup critique
+  const onCrit = useCallback(() => {
+    setCrit(true);
+    clearTimeout(critTimer.current);
+    critTimer.current = setTimeout(() => setCrit(false), 150);
   }, []);
 
   // Les ennemis appellent ce handler pour blesser le joueur.
@@ -79,7 +96,7 @@ export function App() {
   useEffect(() => {
     if (hp <= 0) {
       setMode("overworld");
-      setHp(PLAYER_MAX_HP);
+      setHp(maxHp());
     }
   }, [hp]);
 
@@ -106,6 +123,36 @@ export function App() {
       unsubInv();
       unsubSkill();
     };
+  }, []);
+
+  // Attributs : mise à jour du maxHP quand END change. Si le maxHP augmente,
+  // on soigne le joueur du delta pour qu'il profite immédiatement de sa progression.
+  useEffect(() => {
+    const unsubChar = subscribeCharacter(() => {
+      const newMaxHp = maxHp();
+      if (newMaxHp > lastMaxHp.current) {
+        // Le maxHP a augmenté : soigner le joueur du delta
+        const delta = newMaxHp - lastMaxHp.current;
+        setHp((prev) => Math.min(newMaxHp, prev + delta));
+        lastMaxHp.current = newMaxHp;
+      } else if (newMaxHp < lastMaxHp.current) {
+        // Le maxHP a diminué (peu probable mais possible) : limiter les PV
+        setHp((prev) => Math.min(newMaxHp, prev));
+        lastMaxHp.current = newMaxHp;
+      }
+      force((n) => n + 1); // Re-render pour mettre à jour les barres
+    });
+    return () => unsubChar();
+  }, []);
+
+  // Callback pour les montées d'attribut (feedback visuel)
+  useEffect(() => {
+    setOnAttrLevelUp((attr) => {
+      setAttrUp(attr);
+      clearTimeout(attrUpTimer.current);
+      attrUpTimer.current = setTimeout(() => setAttrUp(null), 700);
+    });
+    return () => setOnAttrLevelUp(null);
   }, []);
 
   const overworld = useMemo(() => generateOverworld(OVERWORLD_SEED), []);
@@ -162,7 +209,7 @@ export function App() {
     return () => removeEventListener("keydown", h);
   }, []);
   const onHeal = useCallback((amount: number) => {
-    setHp((prev) => Math.min(PLAYER_MAX_HP, prev + amount));
+    setHp((prev) => Math.min(maxHp(), prev + amount));
   }, []);
 
   // Compétence de l'arme équipée (relue à la volée — `force` déclenche le render).
@@ -211,7 +258,7 @@ export function App() {
           <Player key={`${mode}-${dungeonSeed}-${returnId}`} spawn={spawn} />
         </Physics>
 
-        <Sword onHit={onHit} />
+        <Sword onHit={onHit} onCrit={onCrit} />
         <Interaction onLabel={setLabel} onEnter={onEnter} onExit={onExit} onCorpse={onCorpse} />
 
         <PointerLockControls
@@ -233,16 +280,24 @@ export function App() {
         corpse={lootCorpse}
         onHeal={onHeal}
         hp={hp}
-        maxHp={PLAYER_MAX_HP}
+        maxHp={maxHp()}
       />
 
       <div className="crosshair" />
       {hitmark && <div className="hitmarker" />}
+      {crit && <div className="hitmarker hitmarker--crit" />}
       {hurt && <div className="hurt" />}
       {label && <div className="prompt">{label}</div>}
+      {/* Feedback de montée d'attribut */}
+      {attrUp && (
+        <div className="attr-up">
+          <span className="attr-up-abbr">{attrUp}</span>
+          <span className="attr-up-label">{ATTR_LABEL[attrUp]} ↑</span>
+        </div>
+      )}
 
       <div className="healthbar">
-        <div className="healthbar-fill" style={{ width: `${(hp / PLAYER_MAX_HP) * 100}%` }} />
+        <div className="healthbar-fill" style={{ width: `${(hp / maxHp()) * 100}%` }} />
       </div>
 
       <div className={`skillbar${levelup ? " skillbar--up" : ""}`}>
