@@ -1,4 +1,10 @@
 import { makeRng, randInt, type Rng } from "../rng";
+import {
+  DUNGEON_SIZE,
+  DUNGEON_CELL_RATIO,
+  DUNGEON_ENEMY_MIN_DIST,
+  DUNGEON_MAX_ENEMIES,
+} from "../config";
 
 // Génération block-based simplifiée (cf. GDD §4), version DONNÉES PURES :
 // aucune dépendance Three.js — on renvoie juste des positions, le rendu et la
@@ -29,7 +35,7 @@ function carve(rng: Rng, size: number): boolean[] {
   const c = Math.floor(size / 2);
 
   const walkers = randInt(rng, 3, 5);
-  const steps = Math.floor(size * size * 0.12);
+  const steps = Math.floor(size * size * DUNGEON_CELL_RATIO);
   for (let w = 0; w < walkers; w++) {
     let x = c;
     let y = c;
@@ -59,7 +65,7 @@ function carve(rng: Rng, size: number): boolean[] {
 
 export function generateDungeon(seed: number): DungeonData {
   const rng = makeRng(seed);
-  const size = 24;
+  const size = DUNGEON_SIZE;
   const floor = carve(rng, size);
   const at = (x: number, y: number) =>
     x >= 0 && y >= 0 && x < size && y < size && floor[y * size + x];
@@ -107,9 +113,9 @@ export function generateDungeon(seed: number): DungeonData {
   }
 
   // Ennemis : on tire quelques cases praticables éloignées du point d'entrée.
-  const pool = floors.filter(([x, z]) => Math.hypot(x - sx, z - sz) > 12);
+  const pool = floors.filter(([x, z]) => Math.hypot(x - sx, z - sz) > DUNGEON_ENEMY_MIN_DIST);
   const enemies: [number, number][] = [];
-  const n = Math.min(4, pool.length);
+  const n = Math.min(DUNGEON_MAX_ENEMIES, pool.length);
   for (let i = 0; i < n; i++) {
     const idx = Math.floor(rng() * pool.length);
     enemies.push(pool.splice(idx, 1)[0]);

@@ -5,7 +5,7 @@ export function Enemies({ spawns }: { spawns: [number, number][] }) {
   return (
     <>
       {spawns.map((s, i) => (
-        <Enemy key={i} spawn={s} />
+        <Enemy key={i} spawn={s} index={i} />
       ))}
     </>
   );

@@ -5,13 +5,10 @@ import { useKeyboardControls } from "@react-three/drei";
 import * as THREE from "three";
 import { playerPos } from "../combat/playerState";
 import { gameState } from "../combat/gameState";
+import { PLAYER_WALK, PLAYER_RUN, PLAYER_EYE } from "../config";
 
 // Joueur FPS : capsule DYNAMIQUE pilotée par Rapier (gravité + collisions réelles).
 // On lit les touches, on impose la vitesse horizontale, et la caméra suit le corps.
-
-const WALK = 4.2;
-const RUN = 7.5;
-const EYE = 0.6; // décalage centre de capsule -> œil
 
 export function Player({ spawn }: { spawn: [number, number, number] }) {
   const body = useRef<RapierRigidBody>(null);
@@ -45,12 +42,12 @@ export function Player({ spawn }: { spawn: [number, number, number] }) {
     dir.set(0, 0, 0).addScaledVector(right, wx).addScaledVector(fwd, wz);
     if (dir.lengthSq() > 0) dir.normalize();
 
-    const speed = run ? RUN : WALK;
+    const speed = run ? PLAYER_RUN : PLAYER_WALK;
     const v = b.linvel();
     b.setLinvel({ x: dir.x * speed, y: v.y, z: dir.z * speed }, true);
 
     const t = b.translation();
-    camera.position.set(t.x, t.y + EYE, t.z);
+    camera.position.set(t.x, t.y + PLAYER_EYE, t.z);
     playerPos.copy(camera.position);
   });
 
@@ -62,7 +59,7 @@ export function Player({ spawn }: { spawn: [number, number, number] }) {
       mass={1}
       canSleep={false}
       enabledRotations={[false, false, false]}
-      position={[spawn[0], spawn[1] - EYE, spawn[2]]}
+      position={[spawn[0], spawn[1] - PLAYER_EYE, spawn[2]]}
     >
       <CapsuleCollider args={[0.6, 0.4]} />
     </RigidBody>

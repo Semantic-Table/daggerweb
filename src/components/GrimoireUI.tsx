@@ -1,0 +1,841 @@
+import { useEffect, useReducer, useRef, useState, type CSSProperties } from "react";
+import {
+  getInventory,
+  subscribeInventory,
+  equipWeapon,
+  unequipWeapon,
+  consumePotion,
+  pickupItem,
+} from "../combat/inventory";
+import {
+  getSkills,
+  subscribeSkills,
+  levelInfo,
+  skillBonus,
+  CATEGORIES,
+  CATEGORY_LABEL,
+  type WeaponCategory,
+} from "../combat/skills";
+import type { CorpseHandle } from "../combat/corpseRegistry";
+import type { ItemDef, WeaponDef } from "../items/itemDefs";
+import { INV_MAX_WEIGHT } from "../config";
+import {
+  THEME_ORDER,
+  THEME_LABEL,
+  THEME_GOLD,
+  loadTheme,
+  saveTheme,
+  type ThemeKey,
+} from "../ui/themes";
+
+/* ── Icônes d'objet : formes CSS (clip-path) colorées, à la maquette ──────────
+   On garde l'esprit du handoff (icônes dessinées, pas d'images) tout en restant
+   sur les types réels du jeu (arme/potion). À remplacer par des sprites plus tard. */
+type IconKind = "sword" | "axe" | "fist" | "bottle";
+function iconKind(item: ItemDef): IconKind {
+  if (item.kind === "potion") return "bottle";
+  if (item.category === "axe") return "axe";
+  if (item.category === "unarmed") return "fist";
+  return "sword";
+}
+const ICON_POLY: Record<IconKind, string> = {
+  sword:
+    "polygon(45% 2%,55% 2%,55% 52%,68% 56%,68% 66%,55% 66%,55% 80%,62% 80%,62% 90%,38% 90%,38% 80%,45% 80%,45% 66%,32% 66%,32% 56%,45% 52%)",
+  axe: "polygon(44% 6%,52% 6%,52% 52%,52% 94%,44% 94%,44% 58%,18% 58%,14% 34%,44% 26%)",
+  fist: "polygon(18% 32%,82% 32%,82% 44%,92% 44%,92% 70%,18% 70%)",
+  bottle: "polygon(40% 2%,60% 2%,60% 26%,80% 54%,80% 96%,20% 96%,20% 54%,40% 26%)",
+};
+const ICON_COLOR: Record<IconKind, string> = {
+  sword: "oklch(0.63 0.14 38)",
+  axe: "oklch(0.63 0.14 38)",
+  fist: "oklch(0.6 0.1 65)",
+  bottle: "oklch(0.62 0.13 150)",
+};
+function itemIcon(item: ItemDef, size: number): CSSProperties {
+  const k = iconKind(item);
+  return {
+    width: size,
+    height: size,
+    background: ICON_COLOR[k],
+    clipPath: ICON_POLY[k],
+    imageRendering: "pixelated",
+    flex: "none",
+  };
+}
+
+const TYPE_LABEL: Record<string, string> = { weapon: "Arme", potion: "Potion" };
+
+/* Catégories de filtre (sacoche). « Armures » / « Divers » restent vides tant que
+   le jeu ne modélise ni armures ni objets divers — placeholders honnêtes. */
+const CATS: { key: string; label: string; kinds: ItemDef["kind"][] | null }[] = [
+  { key: "tout", label: "Tout", kinds: null },
+  { key: "armes", label: "Armes", kinds: ["weapon"] },
+  { key: "armures", label: "Armures", kinds: [] },
+  { key: "magie", label: "Magie", kinds: ["potion"] },
+  { key: "divers", label: "Divers", kinds: [] },
+];
+
+type Tab = "inv" | "equip" | "skills" | "stats" | "magic" | "map";
+const TABS: { key: Tab; label: string }[] = [
+  { key: "inv", label: "SACOCHE" },
+  { key: "equip", label: "ÉQUIPEMENT" },
+  { key: "skills", label: "APTITUDES" },
+  { key: "stats", label: "PERSONNAGE" },
+  { key: "magic", label: "MAGIE" },
+  { key: "map", label: "CARTE" },
+];
+
+/* Attribut gouverneur par catégorie — PLACEHOLDER : les attributs ne sont pas
+   encore en jeu (cf. docs/todo-ui-rpg.md). */
+const SKILL_GOV: Record<WeaponCategory, string> = { blade: "FOR", axe: "FOR", unarmed: "AGI" };
+
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  /** Cadavre en cours de fouille (null = menu seul). */
+  corpse: CorpseHandle | null;
+  onHeal: (amount: number) => void;
+  hp: number;
+  maxHp: number;
+}
+
+export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) {
+  const [, forceUpdate] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => subscribeInventory(forceUpdate), []);
+  useEffect(() => subscribeSkills(forceUpdate), []);
+
+  const [tab, setTab] = useState<Tab>("inv");
+  const [theme, setTheme] = useState<ThemeKey>(loadTheme);
+  const [cat, setCat] = useState("tout");
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const [selSlot, setSelSlot] = useState<number | null>(null);
+  const [selSpell, setSelSpell] = useState("givre");
+  const dragSlot = useRef<number | null>(null);
+
+  // Fouiller un cadavre ramène toujours sur la sacoche.
+  useEffect(() => {
+    if (corpse) setTab("inv");
+  }, [corpse]);
+
+  // Ferme sur Échap ou I.
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.code === "Escape" || e.code === "KeyI") onClose();
+    };
+    addEventListener("keydown", h);
+    return () => removeEventListener("keydown", h);
+  }, [open, onClose]);
+
+  const pickTheme = (k: ThemeKey) => {
+    setTheme(k);
+    saveTheme(k);
+  };
+
+  if (!open) return null;
+
+  const inv = getInventory();
+  const equipped = inv.equipped;
+  const hasWeaponEquipped = equipped.id !== "fists";
+
+  // Slots remplis (avec index réel), filtrés par catégorie.
+  const catDef = CATS.find((c) => c.key === cat)!;
+  const filled = inv.slots
+    .map((item, slot) => ({ item, slot }))
+    .filter((e): e is { item: ItemDef; slot: number } => e.item !== null)
+    .filter((e) => !catDef.kinds || catDef.kinds.includes(e.item.kind));
+
+  const sel = selSlot != null ? inv.slots[selSlot] : null;
+  const selIsEquipped = sel != null && sel === equipped;
+  const totalWt = inv.slots.reduce((a, it) => a + (it?.weight ?? 0), 0);
+
+  const equipSel = () => {
+    if (selSlot == null || !sel || sel.kind !== "weapon") return;
+    if (selIsEquipped) unequipWeapon();
+    else equipWeapon(selSlot);
+  };
+  const useSel = () => {
+    if (selSlot == null || !sel || sel.kind !== "potion") return;
+    const healed = consumePotion(selSlot);
+    if (healed > 0) onHeal(healed);
+    setSelSlot(null);
+  };
+
+  const takeLoot = (item: ItemDef, lootIdx: number) => {
+    if (pickupItem(item) && corpse) {
+      corpse.loot.splice(lootIdx, 1);
+      if (corpse.loot.length === 0) corpse.markLooted();
+      forceUpdate();
+    }
+  };
+
+  return (
+    <div className="grim-overlay" data-theme={theme} onClick={onClose}>
+      <div className="grim-cabinet" onClick={(e) => e.stopPropagation()}>
+        {/* ── Barre de titre ───────────────────────────────────────────── */}
+        <div className="grim-titlebar">
+          <div className="grim-id">
+            <div className="grim-crest" />
+            <div className="grim-id-text">
+              <div className="grim-title">Errant des Marches</div>
+              <div className="grim-sub">Aventurier · sans classe fixe</div>
+            </div>
+          </div>
+          <div className="grim-themes">
+            <span className="grim-theme-label">THÈME</span>
+            {THEME_ORDER.map((k) => (
+              <button
+                key={k}
+                className={`grim-swatch${k === theme ? " grim-swatch--active" : ""}`}
+                style={{ background: THEME_GOLD[k] }}
+                title={THEME_LABEL[k]}
+                onClick={() => pickTheme(k)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* ── Onglets ──────────────────────────────────────────────────── */}
+        <div className="grim-tabs">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              className={`grim-tab${tab === t.key ? " grim-tab--active" : ""}`}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Contenu ──────────────────────────────────────────────────── */}
+        <div className="grim-content">
+          {/* ===== SACOCHE ===== */}
+          {tab === "inv" && (
+            <div className="grim-inv">
+              {/* col. gauche : filtres + charge + or */}
+              <div className="grim-col">
+                <div className="grim-coltitle">CATÉGORIES</div>
+                {CATS.map((c) => (
+                  <button
+                    key={c.key}
+                    className={`grim-cat${cat === c.key ? " grim-cat--active" : ""}`}
+                    onClick={() => setCat(c.key)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+                <div className="grim-encarts">
+                  <div className="grim-encart">
+                    <div className="grim-encart-head">
+                      <span className="grim-dim">CHARGE</span>
+                      <span className="grim-ink">{totalWt} / {INV_MAX_WEIGHT}</span>
+                    </div>
+                    <div className="grim-gauge grim-gauge--sm">
+                      <div
+                        className="grim-gauge-fill"
+                        style={{ width: `${Math.min(100, (totalWt / INV_MAX_WEIGHT) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="grim-encart grim-encart--row" title="Économie à venir">
+                    <span className="grim-dim">OR</span>
+                    <span className="grim-gold-val">
+                      <span className="grim-coin" />—
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* col. centrale : grille / liste */}
+              <div className="grim-col grim-col--grow">
+                {corpse && (
+                  <div className="grim-corpse">
+                    <div className="grim-corpse-head">
+                      CADAVRE · {corpse.loot.length ? "cliquez pour prendre" : "fouillé"}
+                    </div>
+                    <div className="grim-corpse-row">
+                      {corpse.loot.length === 0 ? (
+                        <span className="grim-dim">Rien à prendre.</span>
+                      ) : (
+                        corpse.loot.map((item, i) => (
+                          <button
+                            key={i}
+                            className="grim-corpse-item"
+                            onClick={() => takeLoot(item, i)}
+                            title={`Prendre — ${item.name}`}
+                          >
+                            <span style={itemIcon(item, 18)} />
+                            <span className="grim-corpse-name">{item.name}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className="grim-invhead">
+                  <span className="grim-invtitle">SACOCHE · {filled.length} objets</span>
+                  <div className="grim-minis">
+                    <button
+                      className={`grim-mini${view === "grid" ? " grim-mini--active" : ""}`}
+                      onClick={() => setView("grid")}
+                    >
+                      GRILLE
+                    </button>
+                    <button
+                      className={`grim-mini${view === "list" ? " grim-mini--active" : ""}`}
+                      onClick={() => setView("list")}
+                    >
+                      LISTE
+                    </button>
+                  </div>
+                </div>
+                <div className="grim-itemarea">
+                  {filled.length === 0 ? (
+                    <div className="grim-empty">Aucun objet dans cette catégorie.</div>
+                  ) : view === "grid" ? (
+                    <div className="grim-itemgrid">
+                      {filled.map(({ item, slot }) => {
+                        const eq = item === equipped;
+                        return (
+                          <div
+                            key={slot}
+                            className={`grim-slot${selSlot === slot ? " grim-slot--sel" : ""}${
+                              eq ? " grim-slot--eq" : ""
+                            }`}
+                            draggable
+                            onDragStart={(e) => {
+                              dragSlot.current = slot;
+                              e.dataTransfer.effectAllowed = "move";
+                            }}
+                            onClick={() => setSelSlot(slot)}
+                            title={item.name}
+                          >
+                            <span style={itemIcon(item, 32)} />
+                            <span className="grim-slot-wt">{item.weight}</span>
+                            {eq && <span className="grim-slot-dot">●</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="grim-itemlist">
+                      {filled.map(({ item, slot }) => {
+                        const eq = item === equipped;
+                        return (
+                          <div
+                            key={slot}
+                            className={`grim-row${selSlot === slot ? " grim-row--sel" : ""}`}
+                            draggable
+                            onDragStart={(e) => {
+                              dragSlot.current = slot;
+                              e.dataTransfer.effectAllowed = "move";
+                            }}
+                            onClick={() => setSelSlot(slot)}
+                          >
+                            <span style={itemIcon(item, 22)} />
+                            <span className="grim-row-name">{item.name}</span>
+                            {eq && <span className="grim-row-eq">ÉQUIPÉ</span>}
+                            <span className="grim-row-wt">{item.weight}kg</span>
+                            <span className="grim-row-val">{item.value}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* col. droite : fiche */}
+              <div className="grim-detail">
+                {sel ? (
+                  <div className="grim-detail-in">
+                    <div className="grim-iconbox-wrap">
+                      <div className="grim-iconbox">
+                        <span style={itemIcon(sel, 52)} />
+                      </div>
+                    </div>
+                    <div className="grim-detail-name">{sel.name}</div>
+                    <div className="grim-detail-type">{TYPE_LABEL[sel.kind] ?? "Objet"}</div>
+                    <div className="grim-ministats">
+                      <div className="grim-ministat">
+                        <div className="grim-dim">POIDS</div>
+                        <div className="grim-ink">{sel.weight} kg</div>
+                      </div>
+                      <div className="grim-ministat">
+                        <div className="grim-dim">VALEUR</div>
+                        <div className="grim-gold-val">{sel.value}</div>
+                      </div>
+                      <div className="grim-ministat">
+                        <div className="grim-dim">{sel.kind === "weapon" ? "DÉGÂTS" : "SOIN"}</div>
+                        <div className="grim-ink">
+                          {sel.kind === "weapon" ? sel.dmg : `+${sel.heal}`}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grim-desc">{sel.desc}</div>
+                    <div className="grim-actions">
+                      {sel.kind === "weapon" && (
+                        <button className="grim-btn grim-btn--gold" onClick={equipSel}>
+                          {selIsEquipped ? "RETIRER" : "ÉQUIPER"}
+                        </button>
+                      )}
+                      {sel.kind === "potion" && (
+                        <button className="grim-btn" onClick={useSel}>
+                          UTILISER
+                        </button>
+                      )}
+                      <button className="grim-link" title="Suppression à venir">
+                        jeter l'objet
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grim-nosel">
+                    <div className="grim-rune" />
+                    <div className="grim-dim">
+                      Sélectionnez un objet
+                      <br />
+                      pour l'examiner
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ===== ÉQUIPEMENT (paper-doll) ===== */}
+          {tab === "equip" && (
+            <Equip
+              inv={inv}
+              equipped={equipped}
+              hasWeapon={hasWeaponEquipped}
+              dragSlot={dragSlot}
+            />
+          )}
+
+          {/* ===== APTITUDES ===== */}
+          {tab === "skills" && (
+            <div className="grim-skills">
+              <div className="grim-skills-head">
+                <span className="grim-coltitle">COMPÉTENCES</span>
+                <div className="grim-legend">
+                  <span><span className="grim-tag grim-tag--pri" />Principale</span>
+                  <span><span className="grim-tag grim-tag--maj" />Majeure</span>
+                  <span><span className="grim-tag grim-tag--min" />Mineure</span>
+                </div>
+              </div>
+              <div className="grim-skillgrid">
+                {CATEGORIES.map((c) => {
+                  const info = levelInfo(getSkills()[c].xp);
+                  const bon = skillBonus(c);
+                  const isEq = equipped.category === c;
+                  const dmgPct = Math.round((bon.dmgMult - 1) * 100);
+                  const spdPct = Math.round((1 - bon.speedMult) * 100);
+                  return (
+                    <div key={c} className="grim-skillrow">
+                      <div className="grim-skillrow-top">
+                        <span className={`grim-tag ${isEq ? "grim-tag--pri" : "grim-tag--min"}`} />
+                        <span className="grim-skill-name">{CATEGORY_LABEL[c]}</span>
+                        <span className="grim-gov" title="Attribut gouverneur (à venir)">
+                          {SKILL_GOV[c]}
+                        </span>
+                        <div className="grim-track grim-track--sk">
+                          <div
+                            className="grim-track-fill"
+                            style={{
+                              width: `${(info.into / info.need) * 100}%`,
+                              background: isEq ? "var(--gold)" : "var(--bar)",
+                            }}
+                          />
+                        </div>
+                        <span className="grim-skill-lvl">{bon.level}</span>
+                      </div>
+                      <div className="grim-skillrow-bonus">
+                        {info.into}/{info.need} XP · +{dmgPct}% dég · +{spdPct}% vit
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="grim-note">
+                Les aptitudes montent à l'usage, par catégorie d'arme. Arbre de
+                compétences étendu (escrime, magie, furtivité…) à venir.
+              </div>
+            </div>
+          )}
+
+          {/* ===== PERSONNAGE ===== */}
+          {tab === "stats" && <Stats hp={hp} maxHp={maxHp} />}
+
+          {/* ===== MAGIE ===== */}
+          {tab === "magic" && <Magic sel={selSpell} onSelect={setSelSpell} />}
+
+          {/* ===== CARTE ===== */}
+          {tab === "map" && <MapScreen />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Sous-écrans
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Positions des cases du paper-doll (cf. handoff). */
+const DOLL_SLOTS: { key: string; label: string; top: number; left: number }[] = [
+  { key: "head", label: "Tête", top: 6, left: 121 },
+  { key: "cloak", label: "Cape", top: 74, left: 40 },
+  { key: "amulet", label: "Cou", top: 74, left: 202 },
+  { key: "chest", label: "Torse", top: 132, left: 121 },
+  { key: "rightHand", label: "Arme", top: 200, left: 22 },
+  { key: "leftHand", label: "Main g.", top: 200, left: 220 },
+  { key: "legs", label: "Jambes", top: 244, left: 121 },
+  { key: "gloves", label: "Gants", top: 312, left: 22 },
+  { key: "ring1", label: "Anneau", top: 312, left: 220 },
+  { key: "feet", label: "Pieds", top: 368, left: 121 },
+];
+
+const SILHOUETTE =
+  "polygon(38% 0,62% 0,68% 12%,64% 22%,84% 30%,82% 56%,66% 54%,66% 100%,52% 100%,52% 60%,48% 60%,48% 100%,34% 100%,34% 54%,18% 56%,16% 30%,36% 22%,32% 12%)";
+
+function Equip({
+  inv,
+  equipped,
+  hasWeapon,
+  dragSlot,
+}: {
+  inv: ReturnType<typeof getInventory>;
+  equipped: WeaponDef;
+  hasWeapon: boolean;
+  dragSlot: React.MutableRefObject<number | null>;
+}) {
+  // Sac « équipable » = armes en inventaire non équipées (seules les armes le sont
+  // pour l'instant ; armures à venir, cf. docs/todo-ui-rpg.md).
+  const bag = inv.slots
+    .map((item, slot) => ({ item, slot }))
+    .filter(
+      (e): e is { item: ItemDef; slot: number } =>
+        e.item !== null && e.item.kind === "weapon" && e.item !== equipped
+    );
+
+  const dropWeapon = (e: React.DragEvent) => {
+    e.preventDefault();
+    const slot = dragSlot.current;
+    if (slot == null) return;
+    const it = inv.slots[slot];
+    if (it && it.kind === "weapon") equipWeapon(slot);
+  };
+
+  return (
+    <div className="grim-equip">
+      {/* gauche : sac équipable */}
+      <div className="grim-col">
+        <div className="grim-coltitle">ÉQUIPABLE · glissez →</div>
+        <div className="grim-bag">
+          {bag.length === 0 ? (
+            <div className="grim-empty">Aucune arme à équiper.</div>
+          ) : (
+            bag.map(({ item, slot }) => (
+              <div
+                key={slot}
+                className="grim-bagitem"
+                draggable
+                onDragStart={(e) => {
+                  dragSlot.current = slot;
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onClick={() => equipWeapon(slot)}
+                title={`Équiper — ${item.name}`}
+              >
+                <span style={itemIcon(item, 22)} />
+                <span className="grim-bagitem-name">{item.name}</span>
+                <span className="grim-dim">Arme</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* centre : paper-doll */}
+      <div className="grim-doll-wrap">
+        <div className="grim-doll">
+          <div className="grim-silhouette" style={{ clipPath: SILHOUETTE }} />
+          <div className="grim-doll-cap">▣ figurine</div>
+          {DOLL_SLOTS.map((s) => {
+            const isWeapon = s.key === "rightHand";
+            const filled = isWeapon && hasWeapon;
+            return (
+              <div
+                key={s.key}
+                className={`grim-eqslot${filled ? " grim-eqslot--filled" : ""}`}
+                style={{ top: s.top, left: s.left }}
+                onDragOver={isWeapon ? (e) => e.preventDefault() : undefined}
+                onDrop={isWeapon ? dropWeapon : undefined}
+                onClick={filled ? () => unequipWeapon() : undefined}
+                title={filled ? `${equipped.name} — clic pour retirer` : s.label}
+              >
+                {filled ? (
+                  <span style={itemIcon(equipped, 34)} />
+                ) : (
+                  <span className="grim-eqslot-label">{s.label}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* droite : défense */}
+      <div className="grim-defense">
+        <div className="grim-ac">
+          <div className="grim-dim">CLASSE D'ARMURE</div>
+          <div className="grim-ac-val">10</div>
+        </div>
+        <div className="grim-rule" />
+        <div className="grim-def-row">
+          <span className="grim-dim">ARME</span>
+          <span className="grim-ink">{hasWeapon ? equipped.name : "À mains nues"}</span>
+        </div>
+        <div className="grim-def-row">
+          <span className="grim-dim">DÉGÂTS</span>
+          <span className="grim-gold-val">{equipped.dmg}</span>
+        </div>
+        <div className="grim-dim grim-def-label">PROTECTION PAR PIÈCE</div>
+        <div className="grim-def-list">
+          {["Tête", "Torse", "Jambes", "Mains", "Pieds", "Bouclier"].map((l) => (
+            <div key={l} className="grim-def-row grim-def-row--sm">
+              <span className="grim-dim">{l}</span>
+              <span className="grim-dim">— vide</span>
+            </div>
+          ))}
+        </div>
+        <div className="grim-note grim-note--center">Armures &amp; boucliers à venir.</div>
+      </div>
+    </div>
+  );
+}
+
+/* Attributs — PLACEHOLDER (non modélisés). */
+const ATTRS: { abbr: string; name: string }[] = [
+  { abbr: "FOR", name: "Force" },
+  { abbr: "INT", name: "Intelligence" },
+  { abbr: "VOL", name: "Volonté" },
+  { abbr: "AGI", name: "Agilité" },
+  { abbr: "END", name: "Endurance" },
+  { abbr: "CHA", name: "Charisme" },
+  { abbr: "VIT", name: "Vitesse" },
+  { abbr: "CHN", name: "Chance" },
+];
+
+function Stats({ hp, maxHp }: { hp: number; maxHp: number }) {
+  return (
+    <div className="grim-stats">
+      <div className="grim-col">
+        <div className="grim-coltitle">ATTRIBUTS</div>
+        <div className="grim-attrgrid">
+          {ATTRS.map((a) => (
+            <div key={a.abbr} className="grim-attr">
+              <div className="grim-attr-abbr">{a.abbr}</div>
+              <div className="grim-attr-body">
+                <div className="grim-attr-line">
+                  <span className="grim-ink">{a.name}</span>
+                  <span className="grim-attr-val">—</span>
+                </div>
+                <div className="grim-gauge grim-gauge--sm">
+                  <div className="grim-gauge-fill" style={{ width: "0%" }} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="grim-charpanel">
+        <div className="grim-charhead">
+          <div className="grim-portrait">portrait</div>
+          <div className="grim-charinfo">
+            <div className="grim-detail-name grim-detail-name--left">Errant des Marches</div>
+            <div className="grim-ink">Race · à venir</div>
+            <div className="grim-ink">Classe · sans classe</div>
+            <div className="grim-ink">Niveau · à venir</div>
+          </div>
+        </div>
+        <div className="grim-rule" />
+        {/* Points de vie : RÉEL. Le reste est placeholder. */}
+        <Bar label="Points de vie" val={`${hp} / ${maxHp}`} pct={(hp / maxHp) * 100} />
+        <Bar label="Magie" val="—" pct={0} />
+        <Bar label="Vigueur" val="—" pct={0} />
+        <Bar label="Expérience" val="—" pct={0} />
+        <div className="grim-note">Attributs, magie et progression de niveau à venir.</div>
+      </div>
+    </div>
+  );
+}
+
+function Bar({ label, val, pct }: { label: string; val: string; pct: number }) {
+  return (
+    <div className="grim-bar">
+      <div className="grim-bar-line">
+        <span className="grim-dim">{label}</span>
+        <span className="grim-bar-val">{val}</span>
+      </div>
+      <div className="grim-gauge">
+        <div className="grim-gauge-fill" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+/* Sorts — PLACEHOLDER (pas de système de magie). Contenu d'exemple du handoff. */
+const SPELLS: {
+  id: string;
+  name: string;
+  school: string;
+  cost: number;
+  range: string;
+  effect: string;
+}[] = [
+  { id: "givre", name: "Trait de Givre", school: "Givre", cost: 12, range: "Distance", effect: "Inflige 8-14 dégâts de froid à une cible distante et la ralentit brièvement." },
+  { id: "flamme", name: "Flamme Mineure", school: "Pyromancie", cost: 9, range: "Distance", effect: "Projette une gerbe de feu : 6-12 dégâts thermiques sur la première cible touchée." },
+  { id: "soin", name: "Soin des Plaies", school: "Guérison", cost: 14, range: "Contact", effect: "Restaure 15-25 points de vie sur soi ou un allié au contact." },
+  { id: "ombre", name: "Pas de l'Ombre", school: "Illusion", cost: 11, range: "Soi", effect: "Invisibilité partielle pendant 20 s ; rompue par une attaque." },
+  { id: "lueur", name: "Lueur des Veilleurs", school: "Illusion", cost: 4, range: "Soi", effect: "Crée une lumière flottante qui éclaire les couloirs sombres." },
+];
+
+function Magic({ sel, onSelect }: { sel: string; onSelect: (id: string) => void }) {
+  const spell = SPELLS.find((s) => s.id === sel) ?? SPELLS[0];
+  const spellIcon: CSSProperties = {
+    width: 40,
+    height: 40,
+    background: "oklch(0.58 0.12 300)",
+    clipPath: "polygon(50% 4%,96% 50%,50% 96%,4% 50%)",
+    imageRendering: "pixelated",
+  };
+  return (
+    <div className="grim-magic">
+      <div className="grim-col grim-col--grow">
+        <div className="grim-magic-head">
+          <span className="grim-coltitle">GRIMOIRE</span>
+          <div className="grim-magic-mana">
+            <span className="grim-dim">MAGIE</span>
+            <div className="grim-gauge">
+              <div className="grim-gauge-fill" style={{ width: "0%" }} />
+            </div>
+            <span className="grim-bar-val">—</span>
+          </div>
+        </div>
+        <div className="grim-spelllist">
+          {SPELLS.map((s) => (
+            <div
+              key={s.id}
+              className={`grim-spell${sel === s.id ? " grim-spell--sel" : ""}`}
+              onClick={() => onSelect(s.id)}
+            >
+              <span
+                style={{
+                  width: 26,
+                  height: 26,
+                  background: "oklch(0.58 0.12 300)",
+                  clipPath: "polygon(50% 4%,96% 50%,50% 96%,4% 50%)",
+                  flex: "none",
+                }}
+              />
+              <div className="grim-spell-body">
+                <div className="grim-ink">{s.name}</div>
+                <div className="grim-dim">{s.school}</div>
+              </div>
+              <div className="grim-spell-cost">
+                <div className="grim-gold-val">{s.cost}</div>
+                <div className="grim-dim">PM</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="grim-spelldetail">
+        <div className="grim-iconbox-wrap">
+          <div className="grim-iconbox grim-iconbox--sm">
+            <span style={spellIcon} />
+          </div>
+        </div>
+        <div className="grim-detail-name">{spell.name}</div>
+        <div className="grim-detail-type">ÉCOLE DE {spell.school.toUpperCase()}</div>
+        <div className="grim-ministats">
+          <div className="grim-ministat">
+            <div className="grim-dim">COÛT</div>
+            <div className="grim-gold-val">{spell.cost}</div>
+          </div>
+          <div className="grim-ministat">
+            <div className="grim-dim">PORTÉE</div>
+            <div className="grim-ink">{spell.range}</div>
+          </div>
+        </div>
+        <div className="grim-desc">{spell.effect}</div>
+        <button className="grim-btn grim-btn--gold grim-btn--disabled" title="Magie à venir" disabled>
+          INCANTER
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* Carte — PLACEHOLDER. Contenu d'exemple ; à brancher sur l'overworld réel. */
+const MAP_MARKS: { name: string; x: number; y: number; here?: boolean }[] = [
+  { name: "Cendrebois", x: 26, y: 28, here: true },
+  { name: "Pont-aux-Loups", x: 68, y: 40 },
+  { name: "Tour Brisée", x: 58, y: 72 },
+  { name: "Gué de Saule", x: 22, y: 66 },
+];
+const MAP_PLACES: { name: string; dist: string; here?: boolean }[] = [
+  { name: "Cendrebois", dist: "ici", here: true },
+  { name: "Pont-aux-Loups", dist: "2 j" },
+  { name: "Tour Brisée", dist: "3 j" },
+  { name: "Gué de Saule", dist: "1 j" },
+];
+
+function MapScreen() {
+  return (
+    <div className="grim-map">
+      <div className="grim-mapview">
+        <div className="grim-maptitle">LES MARCHES DE CENDREBOIS</div>
+        <div className="grim-compass">
+          <div className="grim-compass-needle" />
+          <span className="grim-compass-n">N</span>
+        </div>
+        {MAP_MARKS.map((m) => (
+          <div key={m.name}>
+            <div
+              className="grim-mark"
+              style={{
+                left: `${m.x}%`,
+                top: `${m.y}%`,
+                background: m.here ? "var(--gold)" : "var(--inkDim)",
+              }}
+            />
+            <div className="grim-mark-label" style={{ left: `${m.x}%`, top: `calc(${m.y}% + 11px)` }}>
+              {m.name}
+            </div>
+          </div>
+        ))}
+        <div className="grim-here" />
+        <div className="grim-here-label">VOUS ÊTES ICI</div>
+        <div className="grim-mapnote">▤ carte de la région à venir</div>
+      </div>
+      <div className="grim-col">
+        <div className="grim-coltitle">LIEUX CONNUS</div>
+        {MAP_PLACES.map((p) => (
+          <div key={p.name} className="grim-place">
+            <span
+              className="grim-place-dot"
+              style={{ background: p.here ? "var(--gold)" : "var(--inkDim)" }}
+            />
+            <span className="grim-ink grim-place-name">{p.name}</span>
+            <span className="grim-dim">{p.dist}</span>
+          </div>
+        ))}
+        <div className="grim-note">Voyage rapide vers les lieux connus à venir.</div>
+      </div>
+    </div>
+  );
+}

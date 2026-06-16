@@ -42,7 +42,7 @@ export function ExitPortal({
         <boxGeometry args={[W + 0.5, 0.5, 0.5]} /><meshStandardMaterial color={stone} flatShading />
       </mesh>
       {/* Voile = seuil de sortie (raycast). DoubleSide : visible des deux côtés. */}
-      <mesh ref={ref} position={[0, (H - 0.5) / 2, 0]} userData={{ exit: true }}>
+      <mesh ref={ref} position={[0, (H - 0.5) / 2, 0.03]} userData={{ exit: true }}>
         <planeGeometry args={[W - 0.5, H - 0.5]} />
         <meshBasicMaterial color="#cfe8ff" side={DoubleSide} transparent opacity={0.55} />
       </mesh>

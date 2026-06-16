@@ -57,14 +57,21 @@ export function generateOverworld(seed: number): OverworldData {
   const radius = 28;
   for (let i = 0; i < count; i++) {
     const a = (i / count) * Math.PI * 2;
+    const x = Math.cos(a) * radius;
+    const z = Math.sin(a) * radius;
+    const rotY = -a + Math.PI / 2;
+    // "Avant" de la porte = +z local après rotation. C'est le côté où s'ouvre
+    // le seuil ; on y place le point de réapparition, quelques mètres devant.
+    const fx = Math.sin(rotY);
+    const fz = Math.cos(rotY);
     entrances.push({
       id: i,
       kind: KINDS[i % KINDS.length],
-      x: Math.cos(a) * radius,
-      z: Math.sin(a) * radius,
-      rotY: -a + Math.PI / 2, // ouverture tournée vers le centre
+      x,
+      z,
+      rotY,
       seed: seed * 31 + i + 1,
-      approach: [Math.cos(a) * (radius - 5), 1.6, Math.sin(a) * (radius - 5)],
+      approach: [x + fx * 6, 1.6, z + fz * 6],
     });
   }
 

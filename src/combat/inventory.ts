@@ -45,6 +45,13 @@ export function equipWeapon(slotIdx: number): void {
   notify();
 }
 
+/** Déséquipe l'arme courante : on repasse à mains nues (cf. paper-doll Grimoire). */
+export function unequipWeapon(): void {
+  if (state.equipped.id === "fists") return;
+  state.equipped = ITEMS.fists as WeaponDef;
+  notify();
+}
+
 /** Consomme une potion du slot donné. Retourne les PV soignés (0 si pas une potion). */
 export function consumePotion(slotIdx: number): number {
   const item = state.slots[slotIdx];

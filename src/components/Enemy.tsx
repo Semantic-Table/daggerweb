@@ -8,26 +8,34 @@ import { damagePlayer } from "../combat/playerCombat";
 import { corpseRegistry, type CorpseHandle } from "../combat/corpseRegistry";
 import { gameState } from "../combat/gameState";
 import { rollLoot } from "../items/itemDefs";
+import {
+  ENEMY_SPEED,
+  ENEMY_STOP_DIST,
+  ENEMY_HP,
+  ENEMY_ATTACK_DIST,
+  ENEMY_ATTACK_CD,
+  ENEMY_ATTACK_DMG,
+} from "../config";
 
 // Ennemi "poursuiveur" (cf. GDD §5) : capsule dynamique Rapier qui avance vers le
-// joueur (lent et lisible). 3 PV. Flash + recul au coup, petite chute à la mort.
+// joueur (lent et lisible). Flash + recul au coup, petite chute à la mort.
 
-const SPEED = 1.8;
-const STOP_DIST = 1.3;
-const HP = 3;
-const ATTACK_DIST = 1.7;
-const ATTACK_CD = 1; // secondes entre deux coups
-const ATTACK_DMG = 8;
-
-export function Enemy({ spawn }: { spawn: [number, number] }) {
+export function Enemy({ spawn, index }: { spawn: [number, number]; index: number }) {
   const body = useRef<RapierRigidBody>(null);
   const mat = useRef<THREE.MeshStandardMaterial>(null);
   const corpseGroup = useRef<THREE.Group>(null);
-  const hp = useRef(HP);
+  const bodyRigRef = useRef<THREE.Group>(null);
+  const leftArmRef = useRef<THREE.Mesh>(null);
+  const rightArmRef = useRef<THREE.Mesh>(null);
+  const leftLegRef = useRef<THREE.Mesh>(null);
+  const rightLegRef = useRef<THREE.Mesh>(null);
+  const hp = useRef(ENEMY_HP);
   const dead = useRef(false);
-  const deathT = useRef(0); // progression de la chute au sol (0→1)
+  const deathT = useRef(0);
   const flash = useRef(0);
   const atkCd = useRef(0);
+  const walkPhase = useRef(0);
+  const attackAnim = useRef(0); // décroît 1→0 après l'attaque (enveloppe sin)
   const [looted, setLooted] = useState(false);
   const tmp = useMemo(() => new THREE.Vector3(), []);
   // Coups en attente : `hit` (appelé depuis un event DOM par l'épée) ne touche
@@ -38,10 +46,11 @@ export function Enemy({ spawn }: { spawn: [number, number] }) {
   const handleRef = useRef<EnemyHandle | null>(null);
   // Cadavre enregistré (persistant) — supprimé du registre au démontage du donjon.
   const corpseHandleRef = useRef<CorpseHandle | null>(null);
-  // Seed de loot basé sur la position de spawn pour être déterministe.
-  const lootSeed = useRef(Math.floor(Math.abs(spawn[0] * 73 + spawn[1] * 37)) % 1000);
+  // Seed de loot : coordonnées de spawn + index pour éviter les collisions entre ennemis.
+  const lootSeed = useRef(
+    (((Math.round(spawn[0] * 100) * 73856093) ^ (Math.round(spawn[1] * 100) * 19349663) ^ (index * 83492791)) >>> 0) % 0xffffff
+  );
   // Variation visuelle déterministe par spawn (taille, teinte, couleur des yeux).
-  // Seed distinct du loot pour ne pas coupler apparence et butin.
   const variant = useMemo(() => {
     let s = (Math.floor(Math.abs(spawn[0] * 131 + spawn[1] * 57)) % 9973) + 1;
     const r = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
@@ -131,7 +140,7 @@ export function Enemy({ spawn }: { spawn: [number, number] }) {
       if (g) {
         deathT.current = Math.min(1, deathT.current + dt * 3.5);
         const e = deathT.current;
-        g.rotation.x = 0.14 + e * (Math.PI / 2 - 0.14);
+        g.rotation.x = e * Math.PI / 2;
         g.position.y = -e * 0.5;
       }
       const lv = b.linvel();
@@ -150,8 +159,8 @@ export function Enemy({ spawn }: { spawn: [number, number] }) {
       corpseGroup.current.rotation.y = Math.atan2(playerPos.x - t.x, playerPos.z - t.z);
     }
     const v = b.linvel();
-    if (d > STOP_DIST) {
-      tmp.normalize().multiplyScalar(SPEED);
+    if (d > ENEMY_STOP_DIST) {
+      tmp.normalize().multiplyScalar(ENEMY_SPEED);
       b.setLinvel({ x: tmp.x, y: v.y, z: tmp.z }, true);
     } else {
       b.setLinvel({ x: 0, y: v.y, z: 0 }, true);
@@ -159,24 +168,49 @@ export function Enemy({ spawn }: { spawn: [number, number] }) {
 
     // Attaque au contact, sur cooldown.
     atkCd.current -= dt;
-    if (d <= ATTACK_DIST && atkCd.current <= 0) {
-      damagePlayer(ATTACK_DMG);
-      atkCd.current = ATTACK_CD;
-      flash.current = 1; // petit flash de l'ennemi qui frappe
+    if (d <= ENEMY_ATTACK_DIST && atkCd.current <= 0) {
+      damagePlayer(ENEMY_ATTACK_DMG);
+      atkCd.current = ENEMY_ATTACK_CD;
+      attackAnim.current = 1; // déclenche l'animation de griffe
     }
+
+    // ── Animations ──────────────────────────────────────────────────────────
+
+    // Walk : phase continue quand le gobelin avance.
+    const isMoving = d > ENEMY_STOP_DIST;
+    if (isMoving) walkPhase.current += dt * 5.5;
+    const ws = isMoving ? Math.sin(walkPhase.current) : 0;
+
+    // Attack : enveloppe sin(t·π) → 0 au déclenchement, pic au milieu, retour à 0.
+    if (attackAnim.current > 0) attackAnim.current = Math.max(0, attackAnim.current - dt * 3.8);
+    const aa = Math.sin(attackAnim.current * Math.PI);
+
+    // Body rig : bob vertical + lunge avant sur attaque.
+    if (bodyRigRef.current) {
+      bodyRigRef.current.position.y = ws * 0.06;
+      bodyRigRef.current.rotation.x = aa * 0.55;
+    }
+
+    // Bras : swing opposé en marche, ruée vers l'avant sur attaque.
+    if (leftArmRef.current)  leftArmRef.current.rotation.set(0.1 + ws * 0.5 - aa * 1.2, 0, 0.48);
+    if (rightArmRef.current) rightArmRef.current.rotation.set(0.1 - ws * 0.5 - aa * 1.2, 0, -0.48);
+
+    // Jambes : phase inverse des bras (foulée naturelle).
+    if (leftLegRef.current)  leftLegRef.current.rotation.set(-ws * 0.35, 0, 0);
+    if (rightLegRef.current) rightLegRef.current.rotation.set(ws * 0.35, 0, 0);
   });
 
-  // Teinte de base variable (rouge sombre → brun), assombrie une fois fouillé.
+  // Peau verte variable (vert frais → vert boueux), assombrie une fois fouillé.
   const base = new THREE.Color().lerpColors(
-    new THREE.Color("#5a241f"),
-    new THREE.Color("#74402a"),
+    new THREE.Color("#4a7c2e"),
+    new THREE.Color("#3a6040"),
     variant.tint,
   );
-  const bodyColor = looted ? base.clone().multiplyScalar(0.42) : base;
-  const headColor = (looted ? base.clone().multiplyScalar(0.3) : base.clone().multiplyScalar(0.68));
-  // Yeux brillants — éteints une fois mort/fouillé.
-  const eyeColor = variant.warmEyes ? "#ffb24a" : "#ff3a2a";
-  const eyeGlow = looted ? 0 : 2.4;
+  const skinColor = looted ? base.clone().multiplyScalar(0.38) : base;
+  const darkColor = looted ? base.clone().multiplyScalar(0.28) : base.clone().multiplyScalar(0.72);
+  // Yeux jaunes perçants — éteints une fois mort/fouillé.
+  const eyeColor = variant.warmEyes ? "#f0d020" : "#c8e030";
+  const eyeGlow = looted ? 0 : 3.0;
   return (
     <RigidBody
       ref={body}
@@ -188,37 +222,61 @@ export function Enemy({ spawn }: { spawn: [number, number] }) {
       position={[spawn[0], 0.9, spawn[1]]}
     >
       <CapsuleCollider args={[0.5, 0.4]} />
-      {/* Léger voûtement vers l'avant + variation de taille (visuel uniquement,
-          le collider reste fixe). */}
-      <group ref={corpseGroup} rotation={[0.14, 0, 0]} scale={variant.scale}>
-        {/* Torse. */}
-        <mesh>
-          <capsuleGeometry args={[0.4, 1, 4, 8]} />
-          <meshStandardMaterial ref={mat} color={bodyColor} roughness={1} flatShading />
-        </mesh>
-        {/* Bras tombants, légèrement écartés. */}
-        <mesh position={[-0.42, 0.12, 0.04]} rotation={[0, 0, 0.22]}>
-          <capsuleGeometry args={[0.12, 0.55, 4, 6]} />
-          <meshStandardMaterial color={headColor} roughness={1} flatShading />
-        </mesh>
-        <mesh position={[0.42, 0.12, 0.04]} rotation={[0, 0, -0.22]}>
-          <capsuleGeometry args={[0.12, 0.55, 4, 6]} />
-          <meshStandardMaterial color={headColor} roughness={1} flatShading />
-        </mesh>
-        {/* Tête avancée (renforce la posture voûtée). */}
-        <mesh position={[0, 0.92, 0.14]}>
-          <sphereGeometry args={[0.28, 8, 6]} />
-          <meshStandardMaterial color={headColor} roughness={1} flatShading />
-        </mesh>
-        {/* Yeux émissifs. */}
-        <mesh position={[-0.11, 0.95, 0.36]}>
-          <sphereGeometry args={[0.055, 6, 5]} />
-          <meshStandardMaterial color="#000" emissive={eyeColor} emissiveIntensity={eyeGlow} toneMapped={false} />
-        </mesh>
-        <mesh position={[0.11, 0.95, 0.36]}>
-          <sphereGeometry args={[0.055, 6, 5]} />
-          <meshStandardMaterial color="#000" emissive={eyeColor} emissiveIntensity={eyeGlow} toneMapped={false} />
-        </mesh>
+      {/* corpseGroup : orientation + animation de mort. bodyRigRef : walk + attack. */}
+      <group ref={corpseGroup} scale={variant.scale * 0.78}>
+        <group ref={bodyRigRef}>
+          {/* Torse trapu. */}
+          <mesh>
+            <capsuleGeometry args={[0.32, 0.55, 4, 8]} />
+            <meshStandardMaterial ref={mat} color={skinColor} roughness={1} flatShading />
+          </mesh>
+          {/* Jambes courtes (animées). */}
+          <mesh ref={leftLegRef} position={[-0.15, -0.52, 0]}>
+            <capsuleGeometry args={[0.1, 0.28, 4, 6]} />
+            <meshStandardMaterial color={darkColor} roughness={1} flatShading />
+          </mesh>
+          <mesh ref={rightLegRef} position={[0.15, -0.52, 0]}>
+            <capsuleGeometry args={[0.1, 0.28, 4, 6]} />
+            <meshStandardMaterial color={darkColor} roughness={1} flatShading />
+          </mesh>
+          {/* Longs bras (animés). */}
+          <mesh ref={leftArmRef} position={[-0.38, -0.12, 0.06]} rotation={[0.1, 0, 0.48]}>
+            <capsuleGeometry args={[0.09, 0.82, 4, 6]} />
+            <meshStandardMaterial color={skinColor} roughness={1} flatShading />
+          </mesh>
+          <mesh ref={rightArmRef} position={[0.38, -0.12, 0.06]} rotation={[0.1, 0, -0.48]}>
+            <capsuleGeometry args={[0.09, 0.82, 4, 6]} />
+            <meshStandardMaterial color={skinColor} roughness={1} flatShading />
+          </mesh>
+          {/* Grosse tête. */}
+          <mesh position={[0, 0.88, 0.16]}>
+            <sphereGeometry args={[0.34, 8, 6]} />
+            <meshStandardMaterial color={skinColor} roughness={1} flatShading />
+          </mesh>
+          {/* Oreilles pointues (cône 3 segments = triangle). */}
+          <mesh position={[-0.34, 1.04, 0.1]} rotation={[0.1, 0.2, -0.9]}>
+            <coneGeometry args={[0.1, 0.38, 3]} />
+            <meshStandardMaterial color={darkColor} roughness={1} flatShading />
+          </mesh>
+          <mesh position={[0.34, 1.04, 0.1]} rotation={[0.1, -0.2, 0.9]}>
+            <coneGeometry args={[0.1, 0.38, 3]} />
+            <meshStandardMaterial color={darkColor} roughness={1} flatShading />
+          </mesh>
+          {/* Nez crochu. */}
+          <mesh position={[0, 0.84, 0.46]} rotation={[0.6, 0, 0]}>
+            <coneGeometry args={[0.06, 0.22, 4]} />
+            <meshStandardMaterial color={darkColor} roughness={1} flatShading />
+          </mesh>
+          {/* Yeux jaunes émissifs. */}
+          <mesh position={[-0.13, 0.94, 0.42]}>
+            <sphereGeometry args={[0.06, 6, 5]} />
+            <meshStandardMaterial color="#000" emissive={eyeColor} emissiveIntensity={eyeGlow} toneMapped={false} />
+          </mesh>
+          <mesh position={[0.13, 0.94, 0.42]}>
+            <sphereGeometry args={[0.06, 6, 5]} />
+            <meshStandardMaterial color="#000" emissive={eyeColor} emissiveIntensity={eyeGlow} toneMapped={false} />
+          </mesh>
+        </group>
       </group>
     </RigidBody>
   );

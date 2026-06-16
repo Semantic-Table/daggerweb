@@ -4,18 +4,14 @@ import * as THREE from "three";
 import type { Entrance } from "../gen/overworldGen";
 import { portalRegistry } from "../portals";
 import { corpseRegistry, type CorpseHandle } from "../combat/corpseRegistry";
+import { ENTRANCE_CONFIG } from "./Entrance";
+import { INTERACT_PORTAL_FAR, INTERACT_CORPSE_FAR } from "../config";
 
 type Target =
   | { kind: "enter"; entrance: Entrance }
   | { kind: "exit" }
   | { kind: "corpse"; handle: CorpseHandle }
   | null;
-
-const LABELS: Record<string, string> = {
-  keep: "[E] Entrer dans le donjon",
-  crypt: "[E] Entrer dans la crypte",
-  cave: "[E] Entrer dans la grotte",
-};
 
 export function Interaction({
   onLabel,
@@ -37,7 +33,7 @@ export function Interaction({
   useFrame(() => {
     camera.getWorldDirection(fwd);
     ray.set(camera.position, fwd);
-    ray.far = 7;
+    ray.far = INTERACT_PORTAL_FAR;
 
     // Portails (entrées + sortie).
     const portalHits = ray.intersectObjects([...portalRegistry], false);
@@ -48,7 +44,7 @@ export function Interaction({
 
     // Cadavres — on raycaste les meshes enregistrés.
     if (!next) {
-      ray.far = 3;
+      ray.far = INTERACT_CORPSE_FAR;
       const corpseMeshes = [...corpseRegistry].map((h) => h.mesh);
       const corpseHits = ray.intersectObjects(corpseMeshes, true);
       if (corpseHits.length > 0) {
@@ -66,7 +62,7 @@ export function Interaction({
     target.current = next;
     const label =
       next?.kind === "enter"
-        ? LABELS[next.entrance.kind]
+        ? ENTRANCE_CONFIG[next.entrance.kind].label
         : next?.kind === "exit"
           ? "[E] Remonter à la surface"
           : next?.kind === "corpse"

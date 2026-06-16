@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Mesh } from "three";
 import { CuboidCollider, RigidBody } from "@react-three/rapier";
-import type { Entrance as EntranceData } from "../gen/overworldGen";
+import type { Entrance as EntranceData, EntranceKind } from "../gen/overworldGen";
 import { portalRegistry } from "../portals";
 
 // Une entrée de donjon. Les meshes pleins sont enveloppés dans un RigidBody
@@ -13,25 +13,29 @@ import { portalRegistry } from "../portals";
 const stone = "#595348";
 const dark = "#33312b";
 
+// Métadonnées par type d'entrée : label d'interaction + géométrie du seuil.
+export const ENTRANCE_CONFIG: Record<EntranceKind, {
+  label: string;
+  portal: { w: number; h: number; y: number; z: number };
+}> = {
+  keep:  { label: "[E] Entrer dans le donjon", portal: { w: 2.4, h: 4,   y: 2,    z: 3.02 } },
+  crypt: { label: "[E] Entrer dans la crypte", portal: { w: 2,   h: 2.7, y: 1.35, z: 2.17 } },
+  cave:  { label: "[E] Entrer dans la grotte", portal: { w: 2.6, h: 3.2, y: 1.7,  z: 1.62 } },
+};
+
 export function Entrance({ data }: { data: EntranceData }) {
   return (
     <group position={[data.x, 0, data.z]} rotation={[0, data.rotY, 0]}>
       {data.kind === "keep" && <Keep />}
       {data.kind === "crypt" && <Crypt />}
       {data.kind === "cave" && <Cave />}
-      <Portal kind={data.kind} data={data} />
+      <Portal data={data} />
     </group>
   );
 }
 
-function Portal({ kind, data }: { kind: string; data: EntranceData }) {
-  // Position/taille du seuil selon le type.
-  const cfg =
-    kind === "keep"
-      ? { w: 2.4, h: 4, y: 2, z: 3.02 }
-      : kind === "crypt"
-        ? { w: 2, h: 2.7, y: 1.35, z: 2.17 }
-        : { w: 2.6, h: 3.2, y: 1.7, z: 1.62 };
+function Portal({ data }: { data: EntranceData }) {
+  const cfg = ENTRANCE_CONFIG[data.kind].portal;
   const ref = useRef<Mesh>(null);
   useEffect(() => {
     const m = ref.current;

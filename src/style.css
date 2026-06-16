@@ -1,134 +1,663 @@
+/* ════════════════════════════════════════════════════════════════════════
+   UI « pixel diégétique » — plaques de bronze biseautées, parchemin, or sur
+   charbon. Tout est net : ombres sans flou, pas de border-radius, pixels
+   carrés pour parler la même langue que le rendu 3D pixelisé (GDD §7).
+   ════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Fonds */
+  --ink:      #07060a;   /* charbon profond (fond global)            */
+  --panel:    #15110c;   /* dos de plaque, brun sombre               */
+  --panel-2:  #1e1810;   /* slot / piste creusée                     */
+  --sunken:   #0a0805;   /* fond de barre, le plus sombre            */
+
+  /* Encre & texte */
+  --bone:     #e7ddc2;   /* parchemin clair (texte courant)          */
+  --bone-dim: #9b9078;   /* texte secondaire                         */
+  --gold:     #ecca6e;   /* or vif (titres, accents)                 */
+  --gold-dim: #b99a4f;   /* or éteint                                */
+
+  /* Bronze des cadres (bevel deux-tons) */
+  --frame:    #6f5a34;   /* bronze médian                            */
+  --frame-hi: #c2a25c;   /* arête éclairée (haut/gauche)             */
+  --frame-lo: #2a2013;   /* arête d'ombre (bas/droite)               */
+
+  /* Jauges */
+  --blood:    #b23535;
+  --blood-lo: #631d1d;
+  --xp:       #dcb44e;
+  --xp-lo:    #8a6c28;
+  --rust:     #c07a34;   /* loot / cadavre                           */
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body, #root { height: 100%; overflow: hidden; background: #0a0a0c; }
-/* Agrandissement net du rendu basse résolution -> pixels carrés (GDD §7). */
+html, body, #root { height: 100%; overflow: hidden; background: var(--ink); }
+
+/* Pixels carrés pour le rendu basse résolution (GDD §7). */
 canvas {
   display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
 
+/* ── Mixins de plaque ────────────────────────────────────────────────────
+   Bevel extrudé : arête claire en haut/gauche, ombre en bas/droite.       */
+.plate {
+  background: var(--panel);
+  border-style: solid;
+  border-width: 3px;
+  border-top-color: var(--frame-hi);
+  border-left-color: var(--frame-hi);
+  border-right-color: var(--frame-lo);
+  border-bottom-color: var(--frame-lo);
+  box-shadow:
+    inset 0 0 0 1px var(--frame),      /* fine bande bronze interne   */
+    0 0 0 1px var(--frame-lo),         /* liseré sombre externe       */
+    0 4px 0 0 rgba(0, 0, 0, 0.45);     /* ombre portée nette          */
+}
+/* Creux : bevel inversé (utilisé pour les pistes de jauge). */
+.sunk {
+  background: var(--sunken);
+  border-style: solid;
+  border-width: 2px;
+  border-top-color: var(--frame-lo);
+  border-left-color: var(--frame-lo);
+  border-right-color: var(--frame-hi);
+  border-bottom-color: var(--frame-hi);
+}
+
+/* Texte courant : police pixel, drop-shadow net (1px, sans flou). */
+body {
+  font-family: "VT323", ui-monospace, "Courier New", monospace;
+}
+
+/* ── Overlay d'accueil / pause ───────────────────────────────────────────*/
 .overlay {
   position: fixed; inset: 0; display: flex;
   align-items: center; justify-content: center;
-  flex-direction: column; gap: 1rem;
-  font-family: ui-monospace, "Courier New", monospace;
-  color: #c8c8b4; background: rgba(8, 8, 10, 0.85);
-  text-align: center; cursor: pointer; z-index: 10;
+  flex-direction: column; gap: 1.4rem;
+  color: var(--bone); text-align: center; cursor: pointer; z-index: 10;
+  background:
+    radial-gradient(ellipse at center, rgba(20, 14, 6, 0.4) 0%, rgba(6, 5, 8, 0.92) 100%);
 }
-.overlay h1 { font-size: 1.6rem; letter-spacing: 0.15em; color: #d8cba0; }
-.overlay p { font-size: 0.85rem; opacity: 0.7; max-width: 28rem; line-height: 1.6; }
+.overlay h1 {
+  font-family: "Press Start 2P", monospace;
+  font-size: 1.7rem; line-height: 1.4; color: var(--gold);
+  letter-spacing: 0.06em;
+  text-shadow: 3px 3px 0 var(--frame-lo), 0 0 18px rgba(236, 202, 110, 0.35);
+}
+.overlay p {
+  font-size: 1.35rem; opacity: 0.85; max-width: 30rem; line-height: 1.5;
+  color: var(--bone-dim); letter-spacing: 0.02em;
+}
 
+/* ── Réticule : petit « + » pixel ────────────────────────────────────────*/
 .crosshair {
   position: fixed; top: 50%; left: 50%;
-  width: 4px; height: 4px; margin: -2px 0 0 -2px;
-  background: #d8cba0; opacity: 0.6; z-index: 5; pointer-events: none;
+  width: 2px; height: 10px; margin: -5px 0 0 -1px;
+  background: var(--gold); opacity: 0.7; z-index: 5; pointer-events: none;
+  box-shadow:
+    -4px 4px 0 0 var(--gold), 4px 4px 0 0 var(--gold);  /* bras horizontaux */
+}
+.crosshair::before {
+  content: ""; position: absolute; top: 4px; left: -5px;
+  width: 12px; height: 2px; background: var(--gold);
 }
 
-/* Flash rouge plein écran quand le joueur encaisse un coup. */
+/* Flash rouge + micro-secousse quand le joueur encaisse. */
+@keyframes hurt-shake {
+  0%   { transform: translate(0, 0); }
+  20%  { transform: translate(-5px, 3px); }
+  40%  { transform: translate(5px, -3px); }
+  60%  { transform: translate(-4px, 4px); }
+  80%  { transform: translate(3px, -2px); }
+  100% { transform: translate(0, 0); }
+}
 .hurt {
   position: fixed; inset: 0; z-index: 4; pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 40%, rgba(180, 20, 20, 0.55) 100%);
+  background: radial-gradient(ellipse at center, transparent 38%, rgba(150, 18, 18, 0.6) 100%);
+  animation: hurt-shake 0.14s steps(3, end);
 }
 
-/* Barre de vie en bas à gauche. */
+/* ── Barre de vie (bas-gauche) ───────────────────────────────────────────*/
 .healthbar {
   position: fixed; bottom: 1.2rem; left: 1.2rem;
-  width: 220px; height: 16px; z-index: 5;
-  background: rgba(8, 8, 10, 0.6); border: 1px solid rgba(216, 203, 160, 0.4);
-  pointer-events: none;
+  width: 232px; height: 20px; z-index: 5; pointer-events: none;
+  background: var(--sunken);
+  border: 2px solid var(--frame-lo);
+  border-top-color: var(--frame-lo); border-left-color: var(--frame-lo);
+  border-right-color: var(--frame-hi); border-bottom-color: var(--frame-hi);
+  box-shadow: 0 0 0 1px var(--frame);
 }
 .healthbar-fill {
-  height: 100%; background: linear-gradient(#b34d4d, #7a2b2b);
-  transition: width 0.15s;
+  height: 100%; background: var(--blood);
+  /* Créneaux verticaux : la jauge se lit « par crans », pas en dégradé lisse. */
+  background-image:
+    linear-gradient(var(--blood) 0%, var(--blood-lo) 100%),
+    repeating-linear-gradient(90deg,
+      transparent 0, transparent 8px,
+      rgba(0, 0, 0, 0.4) 8px, rgba(0, 0, 0, 0.4) 10px);
+  background-blend-mode: multiply;
+  box-shadow: inset 0 2px 0 rgba(255, 180, 180, 0.25);
+  transition: width 0.12s steps(6, end);
 }
 
-/* Rappel discret quand la souris est libérée (ne masque pas la scène). */
+/* ── Compétence de l'arme équipée (au-dessus de la vie) ──────────────────*/
+.skillbar {
+  position: fixed; bottom: 3.6rem; left: 1.2rem;
+  width: 232px; z-index: 5; pointer-events: none;
+  transition: filter 0.2s;
+}
+.skillbar-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 3px;
+}
+.skill-name {
+  color: var(--gold); font-size: 1.05rem; letter-spacing: 0.12em;
+  text-transform: uppercase; text-shadow: 1px 1px 0 var(--frame-lo);
+}
+.skill-level {
+  color: var(--xp); font-size: 1.05rem; letter-spacing: 0.04em;
+  text-shadow: 1px 1px 0 var(--frame-lo);
+}
+.skillbar-track {
+  height: 10px; background: var(--sunken);
+  border: 2px solid var(--frame-lo);
+  border-right-color: var(--frame-hi); border-bottom-color: var(--frame-hi);
+  box-shadow: 0 0 0 1px var(--frame);
+}
+.skillbar-fill {
+  height: 100%; background: var(--xp);
+  background-image:
+    linear-gradient(var(--xp) 0%, var(--xp-lo) 100%),
+    repeating-linear-gradient(90deg,
+      transparent 0, transparent 6px,
+      rgba(0, 0, 0, 0.4) 6px, rgba(0, 0, 0, 0.4) 8px);
+  background-blend-mode: multiply;
+  transition: width 0.12s steps(6, end);
+}
+.skill-bonus {
+  color: var(--bone-dim); font-size: 0.95rem; margin-top: 2px;
+  letter-spacing: 0.03em;
+}
+/* Flash net au passage de palier (« on sent chaque niveau », GDD §1). */
+@keyframes skill-levelup {
+  0%   { filter: brightness(1); }
+  30%  { filter: brightness(2.6) drop-shadow(0 0 6px rgba(236, 202, 110, 0.95)); }
+  100% { filter: brightness(1); }
+}
+.skillbar--up { animation: skill-levelup 0.7s steps(8, end); }
+
+/* ── Rappel discret quand la souris est libérée ──────────────────────────*/
 .hint {
   position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%);
-  font-family: ui-monospace, "Courier New", monospace;
-  color: #c8c8b4; font-size: 0.8rem; opacity: 0.6;
-  background: rgba(8, 8, 10, 0.6); padding: 0.4rem 0.8rem; border-radius: 4px;
+  color: var(--bone-dim); font-size: 1.1rem; letter-spacing: 0.04em;
+  background: var(--panel); padding: 0.35rem 0.9rem;
+  border: 2px solid var(--frame-lo);
+  border-top-color: var(--frame-hi); border-left-color: var(--frame-hi);
   z-index: 5; cursor: pointer;
 }
 
-/* Marqueur de touche : un "✕" rouge bref quand un coup porte. */
+/* ── Marqueur de touche : « ✕ » or quand un coup porte ───────────────────*/
 .hitmarker {
   position: fixed; top: 50%; left: 50%;
-  width: 16px; height: 16px; margin: -8px 0 0 -8px;
+  width: 18px; height: 18px; margin: -9px 0 0 -9px;
   z-index: 6; pointer-events: none;
 }
 .hitmarker::before, .hitmarker::after {
-  content: ""; position: absolute; left: 7px; top: 0;
-  width: 2px; height: 16px; background: #ff5a5a;
+  content: ""; position: absolute; left: 8px; top: 0;
+  width: 2px; height: 18px; background: var(--gold);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
 }
 .hitmarker::before { transform: rotate(45deg); }
-.hitmarker::after { transform: rotate(-45deg); }
+.hitmarker::after  { transform: rotate(-45deg); }
 
+/* ── Invite d'interaction au regard ──────────────────────────────────────*/
 .prompt {
   position: fixed; bottom: 18%; left: 50%; transform: translateX(-50%);
-  font-family: ui-monospace, "Courier New", monospace;
-  color: #e0d4a8; font-size: 1rem; letter-spacing: 0.08em;
-  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9); z-index: 5;
-  pointer-events: none; transition: opacity 0.15s;
+  color: var(--gold); font-size: 1.4rem; letter-spacing: 0.06em;
+  text-shadow: 2px 2px 0 var(--frame-lo), 0 0 8px rgba(0, 0, 0, 0.9);
+  z-index: 5; pointer-events: none; transition: opacity 0.15s;
 }
 
-/* ── Inventaire ─────────────────────────────────────────────────────────── */
-.inv-overlay {
+/* ════════════════════════════════════════════════════════════════════════
+   GRIMOIRE — menu RPG plein écran (6 écrans, 4 palettes commutables).
+   Cf. handoff « UI Daggerfall-inspired » + docs/todo-ui-rpg.md.
+
+   Les tokens du menu (--panel, --gold, --ink, …) sont REDÉFINIS par thème et
+   SCOPÉS à `.grim-overlay` : ils écrasent les :root du HUD seulement dans le
+   menu (sémantique différente — ici --ink = texte clair). Le HUD n'est pas
+   touché. Relief « gravé » par box-shadow inset, zéro border-radius (GDD §7,
+   mémoire « UI pixel diégétique »).
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Palettes ──────────────────────────────────────────────────────────── */
+.grim-overlay[data-theme="donjon"] {
+  --bg:#14110d; --panel:#2b2620; --panel2:#211c17; --slot:#181410;
+  --frame:#3a3026; --frameL:#6b5a3a; --frameD:#0d0a07;
+  --gold:#c9a227; --goldDim:#8a7423; --ink:#e8dcc0; --inkDim:#9c8e72;
+  --accent:#c9742e; --bar:#b8902a;
+}
+.grim-overlay[data-theme="parchemin"] {
+  --bg:#3d3324; --panel:#d8c39a; --panel2:#cab588; --slot:#b6a079;
+  --frame:#a08856; --frameL:#efe1bd; --frameD:#6e5a3a;
+  --gold:#7a5413; --goldDim:#9c7a35; --ink:#382a16; --inkDim:#7a674a;
+  --accent:#a8521e; --bar:#9c7a2a;
+}
+.grim-overlay[data-theme="sang"] {
+  --bg:#0e0d10; --panel:#26242a; --panel2:#1c1b20; --slot:#131217;
+  --frame:#34323a; --frameL:#5a5560; --frameD:#070609;
+  --gold:#c23a3a; --goldDim:#7e2424; --ink:#dcd6da; --inkDim:#8a8590;
+  --accent:#e25555; --bar:#a83030;
+}
+.grim-overlay[data-theme="nuit"] {
+  --bg:#0a0d16; --panel:#1c2233; --panel2:#161b29; --slot:#10141f;
+  --frame:#2e3850; --frameL:#5a6a8a; --frameD:#060912;
+  --gold:#a8bfe2; --goldDim:#6b7c9c; --ink:#dce4f0; --inkDim:#8693ad;
+  --accent:#7aa8e0; --bar:#5f86c4;
+}
+
+@keyframes grim-pulse { 0%,100% { opacity: .45 } 50% { opacity: .85 } }
+
+/* ── Cadre & chrome ────────────────────────────────────────────────────── */
+.grim-overlay {
   position: fixed; inset: 0; z-index: 20;
-  background: rgba(4, 4, 6, 0.72);
-  display: flex; align-items: center; justify-content: center;
-  font-family: ui-monospace, "Courier New", monospace;
+  display: flex; align-items: center; justify-content: center; padding: 28px;
+  background-color: var(--bg);
+  background-image: repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,.16) 3px 4px);
+  font-family: "VT323", ui-monospace, monospace;
+  image-rendering: pixelated;
 }
-.inv-panels {
-  display: flex; gap: 1.2rem; max-width: 860px; width: 100%; padding: 1rem;
+.grim-cabinet {
+  width: 1148px; max-width: 96vw; padding: 7px;
+  background: var(--frame); color: var(--ink);
+  box-shadow:
+    inset 2px 2px 0 var(--frameL), inset -2px -2px 0 var(--frameD),
+    0 0 0 3px var(--frameD), 0 18px 50px rgba(0,0,0,.6);
 }
-.inv-panel {
-  flex: 1; background: rgba(14, 12, 18, 0.96);
-  border: 1px solid rgba(216, 203, 160, 0.25);
-  padding: 1rem; min-width: 260px;
-}
-.inv-panel--loot { border-color: rgba(180, 120, 60, 0.4); }
-.inv-panel-title {
-  color: #d8cba0; font-size: 0.8rem; letter-spacing: 0.14em;
-  text-transform: uppercase; margin-bottom: 0.6rem;
-  border-bottom: 1px solid rgba(216, 203, 160, 0.15); padding-bottom: 0.4rem;
-}
-.inv-panel-sub { color: #888; font-size: 0.72rem; margin-bottom: 0.8rem; }
-.inv-equipped { color: #c8b46a; }
-.inv-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem;
-  margin-bottom: 0.8rem;
-}
-.inv-slot {
-  border: 1px solid rgba(216, 203, 160, 0.15);
-  padding: 0.45rem 0.5rem; cursor: default;
-  display: flex; flex-direction: column; gap: 2px; min-height: 52px;
-  transition: border-color 0.12s, background 0.12s;
-}
-.inv-slot--filled { cursor: pointer; }
-.inv-slot--filled:hover {
-  border-color: rgba(216, 203, 160, 0.5);
-  background: rgba(216, 203, 160, 0.06);
-}
-.inv-slot-icon { font-size: 0.9rem; }
-.inv-slot-name { color: #c8c8b4; font-size: 0.72rem; line-height: 1.3; }
-.inv-slot-stat { color: #888; font-size: 0.65rem; }
-.inv-slot-empty { color: rgba(255,255,255,0.15); font-size: 0.8rem; align-self: center; margin: auto; }
-.inv-hint { color: rgba(200, 200, 180, 0.35); font-size: 0.65rem; }
 
-/* Panel cadavre */
-.inv-loot-empty { color: #666; font-size: 0.8rem; padding: 0.5rem 0; }
-.inv-loot-list { display: flex; flex-direction: column; gap: 0.4rem; }
-.inv-loot-item {
-  display: flex; align-items: center; gap: 0.5rem;
-  border: 1px solid rgba(180, 120, 60, 0.25); padding: 0.4rem 0.5rem;
-  cursor: pointer; transition: border-color 0.12s, background 0.12s;
+.grim-titlebar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 11px 16px; background: var(--panel2);
+  box-shadow: inset 0 -3px 0 var(--frameD), inset 0 1px 0 var(--frameL);
 }
-.inv-loot-item:hover {
-  border-color: rgba(180, 120, 60, 0.6);
-  background: rgba(180, 120, 60, 0.07);
+.grim-id { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.grim-crest {
+  width: 30px; height: 30px; flex: none; background: var(--gold);
+  clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%);
+  box-shadow: 0 0 0 3px var(--frameD);
 }
-.inv-loot-take {
-  margin-left: auto; color: #b47830; font-size: 0.65rem;
-  text-transform: uppercase; letter-spacing: 0.08em;
+.grim-title {
+  font-family: "Pixelify Sans", sans-serif; font-weight: 700; font-size: 21px;
+  letter-spacing: 1px; color: var(--gold); line-height: 1;
+  text-shadow: 2px 2px 0 var(--frameD);
+}
+.grim-sub { font-size: 16px; color: var(--inkDim); letter-spacing: 1px; margin-top: 3px; }
+.grim-themes { display: flex; align-items: center; gap: 7px; flex: none; }
+.grim-theme-label { font-size: 14px; color: var(--inkDim); letter-spacing: 2px; margin-right: 5px; }
+.grim-swatch {
+  width: 22px; height: 22px; border: none; cursor: pointer;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.3), 0 0 0 1px var(--frameD);
+}
+.grim-swatch--active { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+.grim-tabs { display: flex; gap: 5px; padding: 9px 12px 0; background: var(--panel2); }
+.grim-tab {
+  flex: 1; padding: 10px 6px; cursor: pointer; border: none;
+  font-family: "Pixelify Sans", sans-serif; font-size: 15px; letter-spacing: .5px;
+  color: var(--inkDim); background: var(--panel);
+  box-shadow: inset 1px 1px 0 var(--frameL), inset -2px -2px 0 var(--frameD);
+}
+.grim-tab--active {
+  color: var(--frameD); background: var(--gold);
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.4), inset -2px -2px 0 var(--goldDim);
+}
+
+.grim-content {
+  height: 632px; padding: 16px; overflow: hidden;
+  background: var(--panel); box-shadow: inset 0 3px 0 var(--frameD);
+}
+
+/* ── Helpers communs ───────────────────────────────────────────────────── */
+.grim-dim { font-size: 16px; color: var(--inkDim); }
+.grim-ink { font-size: 17px; color: var(--ink); }
+.grim-gold-val { font-family: "Pixelify Sans", sans-serif; color: var(--gold); }
+.grim-coltitle {
+  font-family: "Pixelify Sans", sans-serif; font-size: 16px; color: var(--ink);
+  letter-spacing: 1px; padding-bottom: 2px;
+}
+.grim-col { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.grim-col--grow { flex: 1; }
+.grim-note {
+  font-size: 14px; color: var(--inkDim); line-height: 1.4; opacity: .85;
+  margin-top: auto; padding-top: 8px;
+}
+.grim-note--center { text-align: center; }
+.grim-empty { padding: 20px; text-align: center; font-size: 16px; color: var(--inkDim); }
+.grim-rule { height: 2px; background: var(--frameD); box-shadow: 0 1px 0 var(--frameL); }
+
+.grim-gauge {
+  height: 12px; background: var(--slot); box-shadow: inset 1px 1px 0 var(--frameD);
+}
+.grim-gauge--sm { height: 8px; margin-top: 6px; }
+.grim-gauge-fill { height: 100%; background: var(--bar); transition: width .15s steps(6, end); }
+
+.grim-btn {
+  padding: 9px; cursor: pointer; border: none;
+  font-family: "Pixelify Sans", sans-serif; font-size: 16px; letter-spacing: 1px;
+  color: var(--ink); background: var(--frame);
+  box-shadow: inset 1px 1px 0 var(--frameL), inset -2px -2px 0 var(--frameD);
+}
+.grim-btn--gold {
+  color: var(--frameD); background: var(--gold);
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.4), inset -2px -2px 0 var(--goldDim);
+}
+.grim-btn--disabled { opacity: .5; cursor: not-allowed; }
+.grim-link {
+  padding: 8px; cursor: pointer; border: none; background: transparent;
+  font-family: inherit; font-size: 16px; letter-spacing: 1px; color: var(--inkDim);
+}
+
+.grim-iconbox-wrap { display: flex; justify-content: center; padding: 14px 0 16px; }
+.grim-iconbox {
+  width: 96px; height: 96px; display: flex; align-items: center; justify-content: center;
+  background: var(--slot);
+  box-shadow: inset 2px 2px 0 var(--frameD), inset -2px -2px 0 var(--frameL);
+}
+.grim-iconbox--sm { width: 78px; height: 78px; }
+.grim-detail-name {
+  font-family: "Pixelify Sans", sans-serif; font-size: 19px; color: var(--gold);
+  text-align: center; line-height: 1.15; text-shadow: 1px 1px 0 var(--frameD);
+}
+.grim-detail-name--left { text-align: left; }
+.grim-detail-type {
+  font-size: 15px; color: var(--inkDim); text-align: center; letter-spacing: 1px; margin-top: 5px;
+}
+.grim-ministats { display: flex; gap: 7px; margin: 13px 0; }
+.grim-ministat {
+  flex: 1; padding: 6px; text-align: center;
+  background: var(--slot); box-shadow: inset 1px 1px 0 var(--frameD);
+}
+.grim-ministat > div:first-child { font-size: 13px; color: var(--inkDim); }
+.grim-ministat > div:last-child { font-size: 18px; }
+.grim-desc { font-size: 17px; color: var(--ink); line-height: 1.35; opacity: .9; flex: 1; }
+.grim-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+
+.grim-tag { width: 11px; height: 11px; flex: none; display: inline-block; }
+.grim-tag--pri { background: var(--gold); }
+.grim-tag--maj { background: var(--accent); }
+.grim-tag--min { background: var(--frame); }
+
+/* ── Sacoche ───────────────────────────────────────────────────────────── */
+.grim-inv { display: grid; grid-template-columns: 158px 1fr 286px; gap: 14px; height: 600px; }
+.grim-cat {
+  text-align: left; padding: 9px 12px; cursor: pointer; border: none;
+  font-family: "Pixelify Sans", sans-serif; font-size: 15px;
+  color: var(--ink); background: var(--panel2);
+  box-shadow: inset 1px 1px 0 var(--frameL), inset -1px -1px 0 var(--frameD);
+}
+.grim-cat--active {
+  color: var(--frameD); background: var(--gold); box-shadow: inset -3px 0 0 var(--goldDim);
+}
+.grim-encarts { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+.grim-encart {
+  padding: 9px 11px; background: var(--panel2);
+  box-shadow: inset 1px 1px 0 var(--frameD), inset -1px -1px 0 var(--frameL);
+}
+.grim-encart--row { display: flex; align-items: center; justify-content: space-between; }
+.grim-encart-head { display: flex; align-items: center; justify-content: space-between; }
+.grim-gold-val .grim-coin,
+.grim-coin {
+  display: inline-block; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--gold); box-shadow: 0 0 0 1px var(--frameD); margin-right: 7px;
+  vertical-align: middle;
+}
+
+.grim-corpse {
+  margin-bottom: 9px; padding: 8px 10px; background: var(--panel2);
+  box-shadow: inset 1px 1px 0 var(--frameD), inset -1px -1px 0 var(--frameL);
+}
+.grim-corpse-head {
+  font-family: "Pixelify Sans", sans-serif; font-size: 14px; color: var(--accent);
+  letter-spacing: 1px; margin-bottom: 6px;
+}
+.grim-corpse-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.grim-corpse-item {
+  display: flex; align-items: center; gap: 7px; padding: 5px 9px; cursor: pointer; border: none;
+  font-family: inherit; color: var(--ink); background: var(--panel);
+  box-shadow: inset 1px 1px 0 var(--frameL), inset -1px -1px 0 var(--frameD);
+}
+.grim-corpse-name { font-size: 15px; }
+
+.grim-invhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+.grim-invtitle { font-family: "Pixelify Sans", sans-serif; font-size: 16px; color: var(--ink); letter-spacing: 1px; }
+.grim-minis { display: flex; gap: 4px; }
+.grim-mini {
+  padding: 6px 11px; cursor: pointer; border: none;
+  font-family: "Pixelify Sans", sans-serif; font-size: 13px;
+  color: var(--inkDim); background: var(--panel2);
+  box-shadow: inset 1px 1px 0 var(--frameL), inset -1px -1px 0 var(--frameD);
+}
+.grim-mini--active {
+  color: var(--frameD); background: var(--gold); box-shadow: inset 1px 1px 0 rgba(255,255,255,.3);
+}
+.grim-itemarea {
+  flex: 1; overflow-y: auto; padding: 11px;
+  background: var(--slot); box-shadow: inset 2px 2px 0 var(--frameD);
+}
+.grim-itemgrid { display: grid; grid-template-columns: repeat(auto-fill, 64px); gap: 8px; align-content: start; }
+.grim-slot {
+  position: relative; width: 64px; height: 64px; cursor: grab;
+  display: flex; align-items: center; justify-content: center; background: var(--panel);
+  box-shadow: inset 1px 1px 0 var(--frameL), inset -2px -2px 0 var(--frameD);
+}
+.grim-slot--eq { opacity: .55; }
+.grim-slot--sel { box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 1px var(--frameD); opacity: 1; }
+.grim-slot-wt { position: absolute; bottom: 1px; right: 3px; font-size: 13px; color: var(--inkDim); line-height: 1; }
+.grim-slot-dot { position: absolute; top: 1px; left: 3px; font-size: 13px; color: var(--gold); line-height: 1; }
+.grim-itemlist { display: flex; flex-direction: column; gap: 3px; }
+.grim-row {
+  display: flex; align-items: center; gap: 11px; padding: 7px 10px; cursor: grab;
+  box-shadow: inset 1px 1px 0 var(--frameL), inset -1px -1px 0 var(--frameD);
+}
+.grim-row--sel { background: var(--panel); box-shadow: inset 0 0 0 2px var(--accent); }
+.grim-row-name { flex: 1; font-size: 18px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grim-row-eq { font-size: 13px; color: var(--gold); letter-spacing: 1px; }
+.grim-row-wt { font-size: 16px; color: var(--inkDim); width: 44px; text-align: right; }
+.grim-row-val { font-size: 16px; color: var(--gold); width: 50px; text-align: right; }
+
+.grim-detail {
+  display: flex; flex-direction: column; background: var(--panel2);
+  box-shadow: inset 2px 2px 0 var(--frameD), inset -1px -1px 0 var(--frameL);
+}
+.grim-detail-in { padding: 16px; display: flex; flex-direction: column; height: 100%; }
+.grim-nosel {
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 24px; text-align: center;
+}
+.grim-rune {
+  width: 46px; height: 46px; border: 3px solid var(--frame);
+  clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%);
+  animation: grim-pulse 2.6s ease-in-out infinite;
+}
+
+/* ── Équipement ────────────────────────────────────────────────────────── */
+.grim-equip { display: grid; grid-template-columns: 260px 1fr 264px; gap: 14px; height: 600px; }
+.grim-bag {
+  flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px;
+  background: var(--slot); box-shadow: inset 2px 2px 0 var(--frameD);
+}
+.grim-bagitem {
+  display: flex; align-items: center; gap: 10px; padding: 7px 9px; cursor: grab;
+  background: var(--panel);
+  box-shadow: inset 1px 1px 0 var(--frameL), inset -1px -1px 0 var(--frameD);
+}
+.grim-bagitem-name { flex: 1; font-size: 17px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grim-doll-wrap {
+  display: flex; align-items: center; justify-content: center; background: var(--panel2);
+  box-shadow: inset 2px 2px 0 var(--frameD), inset -1px -1px 0 var(--frameL);
+}
+.grim-doll { position: relative; width: 300px; height: 440px; }
+.grim-silhouette {
+  position: absolute; left: 50%; top: 18px; transform: translateX(-50%);
+  width: 150px; height: 404px; opacity: .5;
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,.03) 0 6px, transparent 6px 12px);
+}
+.grim-doll-cap {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  font-size: 14px; color: var(--inkDim); letter-spacing: 2px; opacity: .5; pointer-events: none;
+}
+.grim-eqslot {
+  position: absolute; width: 58px; height: 58px; padding: 4px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--slot); box-shadow: inset 2px 2px 0 var(--frameD);
+}
+.grim-eqslot--filled {
+  background: var(--panel); cursor: pointer;
+  box-shadow: inset 1px 1px 0 var(--frameL), inset -2px -2px 0 var(--frameD), 0 0 0 1px var(--gold);
+}
+.grim-eqslot-label { font-size: 11px; color: var(--inkDim); letter-spacing: 1px; text-align: center; line-height: 1.1; opacity: .8; }
+.grim-defense {
+  display: flex; flex-direction: column; gap: 11px; padding: 16px;
+  background: var(--panel2); box-shadow: inset 2px 2px 0 var(--frameD), inset -1px -1px 0 var(--frameL);
+}
+.grim-ac { text-align: center; }
+.grim-ac .grim-dim { letter-spacing: 2px; }
+.grim-ac-val {
+  font-family: "Pixelify Sans", sans-serif; font-weight: 700; font-size: 48px; color: var(--gold);
+  line-height: 1; text-shadow: 2px 2px 0 var(--frameD);
+}
+.grim-def-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 11px; background: var(--slot); box-shadow: inset 1px 1px 0 var(--frameD);
+}
+.grim-def-row--sm { padding: 5px 9px; }
+.grim-def-label { letter-spacing: 1px; margin-top: 4px; }
+.grim-def-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+
+/* ── Aptitudes ─────────────────────────────────────────────────────────── */
+.grim-skills { height: 600px; display: flex; flex-direction: column; }
+.grim-skills-head { display: flex; align-items: center; gap: 18px; margin-bottom: 13px; }
+.grim-legend { display: flex; gap: 16px; }
+.grim-legend span { display: flex; align-items: center; gap: 6px; font-size: 15px; color: var(--inkDim); }
+.grim-skillgrid {
+  flex: 1; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr;
+  gap: 7px 16px; align-content: start;
+}
+.grim-skillrow {
+  background: var(--panel2); padding: 7px 11px;
+  box-shadow: inset 1px 1px 0 var(--frameD), inset -1px -1px 0 var(--frameL);
+}
+.grim-skillrow-top { display: flex; align-items: center; gap: 10px; }
+.grim-skill-name { flex: 1; font-size: 18px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grim-gov { font-size: 14px; color: var(--inkDim); width: 34px; text-align: center; border: 1px solid var(--frame); padding: 1px 0; }
+.grim-track { width: 96px; height: 11px; flex: none; background: var(--slot); box-shadow: inset 1px 1px 0 var(--frameD); }
+.grim-track--sk { width: 96px; }
+.grim-track-fill { height: 100%; }
+.grim-skill-lvl { font-family: "Pixelify Sans", sans-serif; font-size: 17px; color: var(--gold); width: 30px; text-align: right; }
+.grim-skillrow-bonus { font-size: 14px; color: var(--inkDim); margin-top: 4px; letter-spacing: .02em; }
+
+/* ── Personnage ────────────────────────────────────────────────────────── */
+.grim-stats { display: grid; grid-template-columns: 1fr 320px; gap: 14px; height: 600px; }
+.grim-attrgrid { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 9px; }
+.grim-attr {
+  display: flex; align-items: center; gap: 14px; padding: 11px 14px;
+  background: var(--panel2); box-shadow: inset 2px 2px 0 var(--frameD), inset -1px -1px 0 var(--frameL);
+}
+.grim-attr-abbr {
+  width: 46px; height: 46px; flex: none; display: flex; align-items: center; justify-content: center;
+  font-family: "Pixelify Sans", sans-serif; font-weight: 700; font-size: 18px; color: var(--gold);
+  background: var(--slot); box-shadow: inset 1px 1px 0 var(--frameD);
+}
+.grim-attr-body { flex: 1; min-width: 0; }
+.grim-attr-line { display: flex; align-items: baseline; justify-content: space-between; }
+.grim-attr-val { font-family: "Pixelify Sans", sans-serif; font-size: 24px; color: var(--ink); }
+.grim-charpanel { display: flex; flex-direction: column; gap: 12px; }
+.grim-charhead { display: flex; gap: 12px; }
+.grim-portrait {
+  width: 94px; height: 118px; flex: none; display: flex; align-items: flex-end; justify-content: center;
+  padding-bottom: 7px; font-size: 13px; color: var(--inkDim); letter-spacing: 1px;
+  background: var(--slot);
+  background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.04) 0 5px, transparent 5px 10px);
+  box-shadow: inset 2px 2px 0 var(--frameD), inset -2px -2px 0 var(--frameL);
+}
+.grim-charinfo { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.grim-charinfo .grim-ink { font-size: 16px; }
+.grim-bar-line { display: flex; align-items: baseline; justify-content: space-between; }
+.grim-bar-val { font-family: "Pixelify Sans", sans-serif; font-size: 18px; color: var(--ink); }
+.grim-bar { display: flex; flex-direction: column; gap: 5px; }
+
+/* ── Magie ─────────────────────────────────────────────────────────────── */
+.grim-magic { display: grid; grid-template-columns: 1fr 300px; gap: 14px; height: 600px; }
+.grim-magic-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.grim-magic-mana { flex: 1; display: flex; align-items: center; gap: 9px; }
+.grim-magic-mana .grim-gauge { flex: 1; height: 14px; }
+.grim-spelllist { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+.grim-spell {
+  display: flex; align-items: center; gap: 12px; padding: 9px 12px; cursor: pointer;
+  box-shadow: inset 1px 1px 0 var(--frameL), inset -1px -1px 0 var(--frameD);
+}
+.grim-spell--sel { background: var(--panel2); box-shadow: inset 0 0 0 2px var(--accent); }
+.grim-spell-body { flex: 1; min-width: 0; }
+.grim-spell-body > div:first-child { font-size: 19px; }
+.grim-spell-cost { text-align: right; flex: none; }
+.grim-spell-cost .grim-gold-val { font-size: 17px; }
+.grim-spell-cost .grim-dim { font-size: 13px; }
+.grim-spelldetail {
+  display: flex; flex-direction: column; padding: 18px;
+  background: var(--panel2); box-shadow: inset 2px 2px 0 var(--frameD), inset -1px -1px 0 var(--frameL);
+}
+
+/* ── Carte ─────────────────────────────────────────────────────────────── */
+.grim-map { height: 600px; display: flex; gap: 14px; }
+.grim-mapview {
+  flex: 1; position: relative; overflow: hidden;
+  background: var(--slot); box-shadow: inset 2px 2px 0 var(--frameD);
+  background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 8px, transparent 8px 16px);
+}
+.grim-maptitle {
+  position: absolute; top: 14px; left: 16px;
+  font-family: "Pixelify Sans", sans-serif; font-size: 18px; color: var(--gold);
+  letter-spacing: 1px; text-shadow: 1px 1px 0 var(--frameD);
+}
+.grim-compass {
+  position: absolute; top: 14px; right: 16px; width: 54px; height: 54px;
+  border: 2px solid var(--frame); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+.grim-compass-needle { width: 22px; height: 22px; background: var(--gold); clip-path: polygon(50% 0,62% 50%,50% 100%,38% 50%); }
+.grim-compass-n { position: absolute; top: 2px; font-size: 12px; color: var(--inkDim); }
+.grim-mark {
+  position: absolute; width: 12px; height: 12px; transform: translate(-50%,-50%);
+  clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); box-shadow: 0 0 0 1px var(--frameD);
+}
+.grim-mark-label {
+  position: absolute; transform: translateX(-50%); font-size: 13px; color: var(--ink);
+  white-space: nowrap; text-shadow: 1px 1px 0 var(--frameD);
+}
+.grim-here {
+  position: absolute; left: 46%; top: 54%; transform: translate(-50%,-50%);
+  width: 18px; height: 18px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(201,116,46,.3), 0 0 0 1px var(--frameD);
+  animation: grim-pulse 1.8s ease-in-out infinite;
+}
+.grim-here-label {
+  position: absolute; left: 46%; top: 54%; transform: translate(-50%, 18px);
+  font-family: "Pixelify Sans", sans-serif; font-size: 13px; color: var(--accent);
+  white-space: nowrap; text-shadow: 1px 1px 0 var(--frameD);
+}
+.grim-mapnote { position: absolute; bottom: 14px; left: 16px; font-size: 14px; color: var(--inkDim); letter-spacing: 1px; opacity: .7; }
+.grim-place {
+  display: flex; align-items: center; gap: 10px; padding: 9px 11px; background: var(--panel2);
+  box-shadow: inset 1px 1px 0 var(--frameD), inset -1px -1px 0 var(--frameL);
+}
+.grim-place-dot { width: 11px; height: 11px; flex: none; clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); }
+.grim-place-name { flex: 1; }
+
+/* Barre de défilement assortie au thème (menu seulement). */
+.grim-overlay ::-webkit-scrollbar { width: 12px; }
+.grim-overlay ::-webkit-scrollbar-track { background: var(--slot); }
+.grim-overlay ::-webkit-scrollbar-thumb {
+  background: var(--frame);
+  box-shadow: inset 1px 1px 0 var(--frameL), inset -1px -1px 0 var(--frameD);
 }

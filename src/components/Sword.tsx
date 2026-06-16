@@ -3,16 +3,14 @@ import { createPortal, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { enemyRegistry } from "../combat/enemyRegistry";
 import { getInventory, subscribeInventory } from "../combat/inventory";
+import { gainXp, effectiveDmg, effectiveSwingDur } from "../combat/skills";
+import { SWORD_REACH, SWORD_FIST_REACH, SWORD_CONE, SKILL_XP_PER_HIT } from "../config";
 
 // Arme corps-à-corps (cf. GDD §5). Le viewmodel est rendu comme ENFANT de la
 // caméra (via createPortal) : il hérite exactement de sa transform, donc aucun
 // décalage/clip quand on bouge. Coup au clic gauche ; le hit est un balayage
 // (cône + distance), pas un raycast fin. Selon l'arme équipée, on affiche une
 // lame (swing) ou les poings (jab) — cf. `render` dans itemDefs.
-
-const REACH = 2.6; // portée d'une lame
-const FIST_REACH = 1.9; // portée plus courte à mains nues
-const CONE = 0.5; // cos de l'angle du cône (≈ 60°)
 
 // Transform du viewmodel lame (position / rotation au repos / échelle).
 const VM = { px: 0.47, py: -0.35, pz: -0.7, rx: -0.23, ry: 0.41, rz: 0.3, scale: 1 };
@@ -66,7 +64,10 @@ export function Sword({ onHit }: { onHit: () => void }) {
       fwd.y = 0;
       fwd.normalize();
       const weapon = equippedRef.current;
-      const reach = weapon.render === "fists" ? FIST_REACH : REACH;
+      const reach = weapon.render === "fists" ? SWORD_FIST_REACH : SWORD_REACH;
+      // Dégâts modulés par la compétence de la catégorie (lecture à la volée —
+      // on ne mute jamais la def d'arme).
+      const dmg = effectiveDmg(weapon);
       let hitAny = false;
       for (const en of enemyRegistry) {
         en.getPosition(tmp);
@@ -74,8 +75,10 @@ export function Sword({ onHit }: { onHit: () => void }) {
         const d = toE.length();
         if (d > reach) continue;
         toE.normalize();
-        if (fwd.dot(toE) > CONE) {
-          en.hit(toE.x, toE.z, weapon.dmg);
+        if (fwd.dot(toE) > SWORD_CONE) {
+          en.hit(toE.x, toE.z, dmg);
+          // XP au coup CONFIRMÉ, par ennemi touché (cf. GDD §6).
+          gainXp(weapon.category, SKILL_XP_PER_HIT);
           hitAny = true;
         }
       }
@@ -92,7 +95,7 @@ export function Sword({ onHit }: { onHit: () => void }) {
     const g = inner.current;
 
     if (swinging.current) {
-      t.current += dt / weapon.swingDur;
+      t.current += dt / effectiveSwingDur(weapon);
       if (t.current >= 1) {
         swinging.current = false;
         t.current = 0;

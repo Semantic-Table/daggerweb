@@ -42,10 +42,15 @@ src/
     Sword.tsx           Viewmodel épée (enfant caméra) + swing + hit
     Enemy.tsx           Poursuiveur : poursuite, hit, mort ragdoll, attaque
     Enemies.tsx         Instancie les ennemis d'un donjon
+    GrimoireUI.tsx      Menu RPG plein écran (6 écrans + 4 palettes) — voir docs/todo-ui-rpg.md
   combat/             ÉTAT PARTAGÉ (hors arbre React)
     playerState.ts      Position monde du joueur (lue par les ennemis)
     enemyRegistry.ts    Ennemis vivants (interrogés par l'épée)
     playerCombat.ts     Canal de dégâts vers le joueur
+    skills.ts           Compétences à l'usage par catégorie d'arme (XP + bonus)
+    inventory.ts        Slots + arme équipée (équiper/déséquiper/consommer/ramasser)
+  ui/
+    themes.ts           Palettes du Grimoire (ordre/libellés) + persistance localStorage
 ```
 
 ## Conventions
@@ -65,5 +70,8 @@ src/
 ## État actuel
 
 Overworld + 3 types d'entrées, donjons procéduraux, déplacement FPS physique,
-épée corps-à-corps, ennemis poursuiveurs, PV joueur + mort/respawn, HUD minimal.
+épée corps-à-corps, ennemis poursuiveurs, PV joueur + mort/respawn, HUD minimal,
+menu RPG « Grimoire » (touche I) inspiré de Daggerfall. Beaucoup d'écrans du menu
+sont des **placeholders** en attendant les mécaniques (armures, or, attributs,
+magie, carte) — état détaillé dans [`docs/todo-ui-rpg.md`](docs/todo-ui-rpg.md).
 Suite possible : [`docs/roadmap.md`](docs/roadmap.md).
