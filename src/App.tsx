@@ -4,6 +4,7 @@ import { KeyboardControls, PointerLockControls, Stats } from "@react-three/drei"
 import { Physics } from "@react-three/rapier";
 import { generateOverworld, type Entrance, type EntranceKind } from "./gen/overworldGen";
 import { generateDungeon } from "./gen/dungeonGen";
+import { generateDungeonName } from "./gen/dungeonNames";
 import { Overworld } from "./components/Overworld";
 import { Dungeon } from "./components/Dungeon";
 import { ExitPortal } from "./components/ExitPortal";
@@ -40,6 +41,7 @@ export function App() {
   const [entranceKind, setEntranceKind] = useState<EntranceKind>("keep");
   const [returnId, setReturnId] = useState<number | null>(null);
   const [label, setLabel] = useState<string | null>(null);
+  const [dungeonName, setDungeonName] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
   const [everLocked, setEverLocked] = useState(false);
   const [hitmark, setHitmark] = useState(false);
@@ -194,12 +196,14 @@ export function App() {
     setDungeonSeed(e.seed);
     setReturnId(e.id);
     setEntranceKind(e.kind);
+    setDungeonName(generateDungeonName(e.kind, e.seed));
     setMode("dungeon");
     setLabel(null);
   }, []);
   const onExit = useCallback(() => {
     setMode("overworld");
     setLabel(null);
+    setDungeonName(null);
   }, []);
   const onCorpse = useCallback((handle: CorpseHandle) => {
     setLootCorpse(handle);
@@ -303,6 +307,10 @@ export function App() {
         onHeal={onHeal}
         hp={hp}
         maxHp={maxHp()}
+        overworldData={overworld}
+        dungeonName={dungeonName}
+        mode={mode}
+        returnId={returnId}
       />
 
       <div className="crosshair" />

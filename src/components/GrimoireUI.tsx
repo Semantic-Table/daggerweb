@@ -41,6 +41,9 @@ import {
 } from "../combat/character";
 import type { CorpseHandle } from "../combat/corpseRegistry";
 import type { ItemDef, WeaponDef, ArmorDef, ArmorSlot } from "../items/itemDefs";
+import type { OverworldData, Entrance } from "../gen/overworldGen";
+import { type EntranceKind } from "../gen/overworldGen";
+import { generateDungeonName, generateDungeonShortName } from "../gen/dungeonNames";
 import {
   THEME_ORDER,
   THEME_LABEL,
@@ -145,9 +148,13 @@ interface Props {
   onHeal: (amount: number) => void;
   hp: number;
   maxHp: number;
+  overworldData: OverworldData;
+  dungeonName: string | null;
+  mode: "overworld" | "dungeon";
+  returnId: number | null;
 }
 
-export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) {
+export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp, overworldData, dungeonName, mode, returnId }: Props) {
   const [, forceUpdate] = useReducer((n: number) => n + 1, 0);
   useEffect(() => subscribeInventory(forceUpdate), []);
   useEffect(() => subscribeSkills(forceUpdate), []);
@@ -620,7 +627,14 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
           {tab === "magic" && <Magic sel={selSpell} onSelect={setSelSpell} />}
 
           {/* ===== CARTE ===== */}
-          {tab === "map" && <MapScreen />}
+          {tab === "map" && (
+            <MapScreen
+              overworldData={overworldData}
+              dungeonName={dungeonName}
+              mode={mode}
+              returnId={returnId}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -1015,21 +1029,75 @@ function Magic({ sel, onSelect }: { sel: string; onSelect: (id: string) => void 
   );
 }
 
-/* Carte — PLACEHOLDER. Contenu d'exemple ; à brancher sur l'overworld réel. */
-const MAP_MARKS: { name: string; x: number; y: number; here?: boolean }[] = [
-  { name: "Cendrebois", x: 26, y: 28, here: true },
-  { name: "Pont-aux-Loups", x: 68, y: 40 },
-  { name: "Tour Brisée", x: 58, y: 72 },
-  { name: "Gué de Saule", x: 22, y: 66 },
-];
-const MAP_PLACES: { name: string; dist: string; here?: boolean }[] = [
-  { name: "Cendrebois", dist: "ici", here: true },
-  { name: "Pont-aux-Loups", dist: "2 j" },
-  { name: "Tour Brisée", dist: "3 j" },
-  { name: "Gué de Saule", dist: "1 j" },
-];
+/* Carte — basée sur les données réelles de l'overworld */
 
-function MapScreen() {
+// Position du joueur dans l'overworld (coordonnées centrales)
+const PLAYER_OVERWORLD_POS = { x: 0, z: 0 };
+
+// Échelle pour convertir les coordonnées monde en pourcentages de carte
+const MAP_SCALE = 100 / 200; // 200 = GROUND size, 100% = carte width
+
+// Convertit les coordonnées monde en position sur la carte (pourcentage)
+function worldToMapCoord(x: number, z: number): { mapX: number; mapY: number } {
+  // Inverser Z car dans le monde, +z = nord, mais sur la carte, +y = sud
+  return {
+    mapX: 50 + x * MAP_SCALE,
+    mapY: 50 - z * MAP_SCALE,
+  };
+}
+
+// Génère les marques pour les entrances de donjons
+function generateDungeonMarks(
+  entrances: Entrance[],
+  returnId: number | null,
+  mode: "overworld" | "dungeon"
+): { name: string; x: number; y: number; here?: boolean; kind: EntranceKind; id: number }[] {
+  return entrances.map((e) => {
+    const { mapX, mapY } = worldToMapCoord(e.x, e.z);
+    const isCurrent = mode === "dungeon" && returnId === e.id;
+    return {
+      name: generateDungeonShortName(e.kind, e.seed),
+      x: mapX,
+      y: mapY,
+      here: isCurrent,
+      kind: e.kind,
+      id: e.id,
+    };
+  });
+}
+
+// Génère la liste des lieux connus (entrances de donjons)
+function generateKnownPlaces(
+  entrances: Entrance[]
+): { name: string; kind: EntranceKind; visited: boolean; id: number }[] {
+  return entrances.map((e) => ({
+    name: generateDungeonShortName(e.kind, e.seed),
+    kind: e.kind,
+    visited: true, // Pour l'instant, tous sont "visités" une fois découverts
+    id: e.id,
+  }));
+}
+
+function MapScreen({
+  overworldData,
+  dungeonName,
+  mode,
+  returnId,
+}: {
+  overworldData: OverworldData;
+  dungeonName: string | null;
+  mode: "overworld" | "dungeon";
+  returnId: number | null;
+}) {
+  const { entrances } = overworldData;
+  
+  // Générer les marques de la carte à partir des vraies entrances
+  const mapMarks = generateDungeonMarks(entrances, returnId, mode);
+  const knownPlaces = generateKnownPlaces(entrances);
+
+  // Position du joueur sur la carte
+  const playerMapPos = worldToMapCoord(PLAYER_OVERWORLD_POS.x, PLAYER_OVERWORLD_POS.z);
+
   return (
     <div className="grim-map">
       <div className="grim-mapview">
@@ -1038,8 +1106,10 @@ function MapScreen() {
           <div className="grim-compass-needle" />
           <span className="grim-compass-n">N</span>
         </div>
-        {MAP_MARKS.map((m) => (
-          <div key={m.name}>
+        
+        {/* Marqueurs des entrances de donjons */}
+        {mapMarks.map((m) => (
+          <div key={`entrance-${m.id}`}>
             <div
               className="grim-mark"
               style={{
@@ -1047,29 +1117,65 @@ function MapScreen() {
                 top: `${m.y}%`,
                 background: m.here ? "var(--gold)" : "var(--inkDim)",
               }}
+              title={generateDungeonName(m.kind, entrances.find(e => e.id === m.id)?.seed || 0)}
             />
             <div className="grim-mark-label" style={{ left: `${m.x}%`, top: `calc(${m.y}% + 11px)` }}>
               {m.name}
             </div>
           </div>
         ))}
-        <div className="grim-here" />
-        <div className="grim-here-label">VOUS ÊTES ICI</div>
-        <div className="grim-mapnote">▤ carte de la région à venir</div>
+        
+        {/* Position du joueur (seulement en overworld) */}
+        {mode === "overworld" && (
+          <>
+            <div 
+              className="grim-here" 
+              style={{ left: `${playerMapPos.mapX}%`, top: `${playerMapPos.mapY}%` }}
+            />
+            <div 
+              className="grim-here-label" 
+              style={{ left: `${playerMapPos.mapX}%`, top: `calc(${playerMapPos.mapY}% + 14px)` }}
+            >
+              VOUS ÊTES ICI
+            </div>
+          </>
+        )}
+        
+        {/* Indicateur si dans un donjon */}
+        {mode === "dungeon" && dungeonName && (
+          <div className="grim-mapnote" style={{ color: "var(--gold)" }}>
+            ▤ {dungeonName}
+          </div>
+        )}
+        
+        {mode === "overworld" && (
+          <div className="grim-mapnote">▤ Explorez pour découvrir des donjons</div>
+        )}
       </div>
       <div className="grim-col">
-        <div className="grim-coltitle">LIEUX CONNUS</div>
-        {MAP_PLACES.map((p) => (
-          <div key={p.name} className="grim-place">
-            <span
-              className="grim-place-dot"
-              style={{ background: p.here ? "var(--gold)" : "var(--inkDim)" }}
-            />
-            <span className="grim-ink grim-place-name">{p.name}</span>
-            <span className="grim-dim">{p.dist}</span>
-          </div>
-        ))}
-        <div className="grim-note">Voyage rapide vers les lieux connus à venir.</div>
+        <div className="grim-coltitle">DONJONS DÉCOUVERTS</div>
+        {knownPlaces.length > 0 ? (
+          knownPlaces.map((p) => (
+            <div key={`place-${p.id}`} className="grim-place">
+              <span
+                className="grim-place-dot"
+                style={{
+                  background: 
+                    mode === "dungeon" && returnId === p.id 
+                      ? "var(--gold)" 
+                      : "var(--inkDim)",
+                }}
+              />
+              <span className="grim-ink grim-place-name">{p.name}</span>
+              <span className="grim-dim">{p.visited ? "exploré" : "?"}</span>
+            </div>
+          ))
+        ) : (
+          <div className="grim-dim">Aucun donjon découvert</div>
+        )}
+        <div className="grim-note">
+          {knownPlaces.length > 0 ? "Voyage rapide à venir." : "Partez à l'aventure !"}
+        </div>
       </div>
     </div>
   );
