@@ -14,13 +14,14 @@ import { Sword } from "./components/Sword";
 import { Enemies } from "./components/Enemies";
 import { GrimoireUI } from "./components/GrimoireUI";
 import { setDamageHandler } from "./combat/playerCombat";
-import { getInventory, subscribeInventory } from "./combat/inventory";
+import { getInventory, subscribeInventory, getArmorClass, pickupItem } from "./combat/inventory";
 import { getSkills, subscribeSkills, levelInfo, skillBonus, CATEGORY_LABEL } from "./combat/skills";
 import { gameState } from "./combat/gameState";
 import { maxHp, subscribeCharacter, setOnAttrLevelUp, ATTR_LABEL } from "./combat/character";
 import type { Attr } from "./combat/character";
 import type { CorpseHandle } from "./combat/corpseRegistry";
 import { PLAYER_IFRAMES_MS } from "./config";
+import { ITEMS } from "./items/itemDefs";
 
 const OVERWORLD_SEED = 1337;
 
@@ -56,6 +57,23 @@ export function App() {
   const hitTimer = useRef<ReturnType<typeof setTimeout>>();
   const hurtTimer = useRef<ReturnType<typeof setTimeout>>();
   const invincibleUntil = useRef(0);
+  
+  // ==========================================================================
+  // INIT : Ajouter des armures de test pour roadmap-armures.md
+  // ==========================================================================
+  useEffect(() => {
+    // Ajouter quelques armures pour tester le système
+    const starterArmor = [
+      ITEMS.leather_cap,
+      ITEMS.leather_vest,
+      ITEMS.leather_leggings,
+      ITEMS.small_shield,
+      ITEMS.chainmail,
+      ITEMS.iron_helmet,
+    ];
+    starterArmor.forEach((armor) => pickupItem(armor));
+  }, []);
+  
   // HUD compétences : on relit les registres (inventaire + skills) à la volée et
   // on force un re-render à chaque changement (même pattern qu'ailleurs).
   const [, force] = useState(0);
@@ -80,11 +98,15 @@ export function App() {
 
   // Les ennemis appellent ce handler pour blesser le joueur.
   // I-frames : ignore les coups pendant PLAYER_IFRAMES_MS après le dernier hit.
+  // Mitigation : réduits les dégâts en fonction de la Classe d'Armure (AC).
   useEffect(() => {
     setDamageHandler((dmg) => {
       if (Date.now() < invincibleUntil.current) return;
       invincibleUntil.current = Date.now() + PLAYER_IFRAMES_MS;
-      setHp((prev) => Math.max(0, prev - dmg));
+      // Appliquer la mitigation : dégâts_subis = max(1, dégâts_entrants - (AC - 10))
+      const ac = getArmorClass();
+      const mitigatedDmg = Math.max(1, dmg - (ac - 10));
+      setHp((prev) => Math.max(0, prev - mitigatedDmg));
       setHurt(true);
       clearTimeout(hurtTimer.current);
       hurtTimer.current = setTimeout(() => setHurt(false), 140);

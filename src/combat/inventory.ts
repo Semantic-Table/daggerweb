@@ -1,4 +1,4 @@
-import type { ItemDef, WeaponDef } from "../items/itemDefs";
+import type { ItemDef, WeaponDef, ArmorDef, ArmorSlot } from "../items/itemDefs";
 import { ITEMS } from "../items/itemDefs";
 import { carryMax, getCurrentWeight } from "./character";
 
@@ -9,11 +9,14 @@ export interface InventoryState {
   /** Tableau dynamique d'items (pas de limite de taille). */
   items: ItemDef[];
   equipped: WeaponDef;
+  /** Carte des armures équipées par emplacement. */
+  armor: Partial<Record<ArmorSlot, ArmorDef>>;
 }
 
 const state: InventoryState = {
   items: [],
   equipped: ITEMS.fists as WeaponDef,
+  armor: {},
 };
 
 const listeners = new Set<() => void>();
@@ -93,6 +96,52 @@ export function removeItemByReference(item: ItemDef): boolean {
   state.items.splice(index, 1);
   notify();
   return true;
+}
+
+/** Équipe une armure à l'index donné si son slot est valide. Retourne l'ancienne armure du slot (si existe). */
+export function equipArmor(index: number): ArmorDef | null {
+  const item = state.items[index];
+  if (!item || item.kind !== "armor") return null;
+  
+  const slot = item.slot;
+  const oldArmor = state.armor[slot] || null;
+  
+  // Remplacer l'ancienne armure du slot
+  if (oldArmor) {
+    state.items.push(oldArmor);
+  }
+  
+  // Équiper la nouvelle
+  state.armor[slot] = item;
+  state.items.splice(index, 1);
+  notify();
+  return oldArmor;
+}
+
+/** Déséquipe une armure d'un slot donné. Retourne l'armure retirée (ou null). */
+export function unequipArmor(slot: ArmorSlot): ArmorDef | null {
+  const armor = state.armor[slot];
+  if (!armor) return null;
+  
+  delete state.armor[slot];
+  state.items.push(armor);
+  notify();
+  return armor;
+}
+
+/** Calcule la Classe d'Armure totale (AC = 10 + somme des armures équipées). */
+export function getArmorClass(): number {
+  let total = 0;
+  for (const slot in state.armor) {
+    const armor = state.armor[slot as ArmorSlot];
+    if (armor) total += armor.armor;
+  }
+  return 10 + total;
+}
+
+/** Retourne les armures équipées. */
+export function getEquippedArmor(): Partial<Record<ArmorSlot, ArmorDef>> {
+  return state.armor;
 }
 
 // ============================================================================

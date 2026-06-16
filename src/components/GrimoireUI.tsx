@@ -8,6 +8,10 @@ import {
   pickupItem,
   getTotalWeight,
   getItemCount,
+  getArmorClass,
+  getEquippedArmor,
+  equipArmor,
+  unequipArmor,
 } from "../combat/inventory";
 import {
   getSkills,
@@ -36,7 +40,7 @@ import {
   type CharacterProfile,
 } from "../combat/character";
 import type { CorpseHandle } from "../combat/corpseRegistry";
-import type { ItemDef, WeaponDef } from "../items/itemDefs";
+import type { ItemDef, WeaponDef, ArmorDef, ArmorSlot } from "../items/itemDefs";
 import {
   THEME_ORDER,
   THEME_LABEL,
@@ -48,10 +52,23 @@ import {
 
 /* ── Icônes d'objet : formes CSS (clip-path) colorées, à la maquette ──────────
    On garde l'esprit du handoff (icônes dessinées, pas d'images) tout en restant
-   sur les types réels du jeu (arme/potion). À remplacer par des sprites plus tard. */
-type IconKind = "sword" | "axe" | "fist" | "bottle";
+   sur les types réels du jeu (arme/potion/armure). À remplacer par des sprites plus tard. */
+type IconKind = "sword" | "axe" | "fist" | "bottle" | "helmet" | "chestplate" | "leggings" | "gloves" | "boots" | "shield" | "cloak";
 function iconKind(item: ItemDef): IconKind {
   if (item.kind === "potion") return "bottle";
+  if (item.kind === "armor") {
+    const armor = item as ArmorDef;
+    switch (armor.slot) {
+      case "head": return "helmet";
+      case "chest": return "chestplate";
+      case "legs": return "leggings";
+      case "gloves": return "gloves";
+      case "feet": return "boots";
+      case "shield": return "shield";
+      case "cloak": return "cloak";
+      default: return "chestplate";
+    }
+  }
   if (item.category === "axe") return "axe";
   if (item.category === "unarmed") return "fist";
   return "sword";
@@ -62,12 +79,28 @@ const ICON_POLY: Record<IconKind, string> = {
   axe: "polygon(44% 6%,52% 6%,52% 52%,52% 94%,44% 94%,44% 58%,18% 58%,14% 34%,44% 26%)",
   fist: "polygon(18% 32%,82% 32%,82% 44%,92% 44%,92% 70%,18% 70%)",
   bottle: "polygon(40% 2%,60% 2%,60% 26%,80% 54%,80% 96%,20% 96%,20% 54%,40% 26%)",
+  // Armures
+  helmet: "polygon(20% 15%,80% 15%,80% 35%,50% 55%,20% 35%)",
+  chestplate: "polygon(20% 10%,80% 10%,80% 50%,60% 90%,40% 90%,20% 50%)",
+  leggings: "polygon(20% 10%,40% 10%,40% 90%,60% 90%,60% 10%,80% 10%,80% 40%,20% 40%)",
+  gloves: "polygon(25% 20%,75% 20%,75% 40%,65% 60%,35% 60%,25% 40%)",
+  boots: "polygon(20% 40%,40% 40%,40% 80%,60% 80%,60% 40%,80% 40%,80% 60%,20% 60%)",
+  shield: "polygon(15% 10%,85% 10%,85% 90%,15% 90%)",
+  cloak: "polygon(10% 0%,90% 0%,90% 30%,60% 50%,30% 50%,0% 30%)",
 };
 const ICON_COLOR: Record<IconKind, string> = {
   sword: "oklch(0.63 0.14 38)",
   axe: "oklch(0.63 0.14 38)",
   fist: "oklch(0.6 0.1 65)",
   bottle: "oklch(0.62 0.13 150)",
+  // Armures - cuir = marron, métal = gris/bleu
+  helmet: "oklch(0.55 0.08 210)",
+  chestplate: "oklch(0.55 0.08 210)",
+  leggings: "oklch(0.55 0.08 210)",
+  gloves: "oklch(0.52 0.06 65)",
+  boots: "oklch(0.52 0.06 65)",
+  shield: "oklch(0.55 0.1 38)",
+  cloak: "oklch(0.5 0.05 30)",
 };
 function itemIcon(item: ItemDef, size: number): CSSProperties {
   const k = iconKind(item);
@@ -81,14 +114,13 @@ function itemIcon(item: ItemDef, size: number): CSSProperties {
   };
 }
 
-const TYPE_LABEL: Record<string, string> = { weapon: "Arme", potion: "Potion" };
+const TYPE_LABEL: Record<string, string> = { weapon: "Arme", potion: "Potion", armor: "Armure" };
 
-/* Catégories de filtre (sacoche). « Armures » / « Divers » restent vides tant que
-   le jeu ne modélise ni armures ni objets divers — placeholders honnêtes. */
+/* Catégories de filtre (sacoche). */
 const CATS: { key: string; label: string; kinds: ItemDef["kind"][] | null }[] = [
   { key: "tout", label: "Tout", kinds: null },
   { key: "armes", label: "Armes", kinds: ["weapon"] },
-  { key: "armures", label: "Armures", kinds: [] },
+  { key: "armures", label: "Armures", kinds: ["armor"] },
   { key: "magie", label: "Magie", kinds: ["potion"] },
   { key: "divers", label: "Divers", kinds: [] },
 ];
@@ -213,7 +245,9 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
 
   const inv = getInventory();
   const equipped = inv.equipped;
+  const equippedArmor = getEquippedArmor();
   const hasWeaponEquipped = equipped.id !== "fists";
+  const ac = getArmorClass();
 
   // Items filtrés par catégorie (avec index réel).
   const catDef = CATS.find((c) => c.key === cat)!;
@@ -223,13 +257,27 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
 
   const sel = selSlot != null ? inv.items[selSlot] : null;
   const selIsEquipped = sel != null && sel === equipped;
+  
+  // Vérifier si l'item sélectionné est une armure équipée
+  const selIsArmorEquipped = sel != null && sel.kind === "armor" && 
+    Object.values(equippedArmor).some((a: ArmorDef | undefined) => a === sel);
   const totalWt = getTotalWeight();
   const maxWt = carryMax();
 
   const equipSel = () => {
-    if (selSlot == null || !sel || sel.kind !== "weapon") return;
-    if (selIsEquipped) unequipWeapon();
-    else equipWeapon(selSlot);
+    if (selSlot == null || !sel) return;
+    if (sel.kind === "weapon") {
+      if (selIsEquipped) unequipWeapon();
+      else equipWeapon(selSlot);
+    } else if (sel.kind === "armor") {
+      const armor = sel as ArmorDef;
+      // Si déjà équipée, la déséquiper
+      if (selIsArmorEquipped) {
+        unequipArmor(armor.slot);
+      } else {
+        equipArmor(selSlot);
+      }
+    }
   };
   const useSel = () => {
     if (selSlot == null || !sel || sel.kind !== "potion") return;
@@ -373,7 +421,9 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
                   ) : view === "grid" ? (
                     <div className="grim-itemgrid">
                       {filled.map(({ item, index }) => {
-                        const eq = item === equipped;
+                        const eq = item === equipped || 
+                          (item.kind === "armor" && 
+                           Object.values(equippedArmor).some((a: ArmorDef | undefined) => a === item));
                         return (
                           <div
                             key={index}
@@ -398,7 +448,9 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
                   ) : (
                     <div className="grim-itemlist">
                       {filled.map(({ item, index }) => {
-                        const eq = item === equipped;
+                        const eq = item === equipped || 
+                          (item.kind === "armor" && 
+                           Object.values(equippedArmor).some((a: ArmorDef | undefined) => a === item));
                         return (
                           <div
                             key={index}
@@ -443,18 +495,35 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
                         <div className="grim-dim">VALEUR</div>
                         <div className="grim-gold-val">{sel.value}</div>
                       </div>
-                      <div className="grim-ministat">
-                        <div className="grim-dim">{sel.kind === "weapon" ? "DÉGÂTS" : "SOIN"}</div>
-                        <div className="grim-ink">
-                          {sel.kind === "weapon" ? sel.dmg : `+${sel.heal}`}
+                      {sel.kind === "weapon" && (
+                        <div className="grim-ministat">
+                          <div className="grim-dim">DÉGÂTS</div>
+                          <div className="grim-ink">{sel.dmg}</div>
                         </div>
-                      </div>
+                      )}
+                      {sel.kind === "potion" && (
+                        <div className="grim-ministat">
+                          <div className="grim-dim">SOIN</div>
+                          <div className="grim-ink">+{sel.heal}</div>
+                        </div>
+                      )}
+                      {sel.kind === "armor" && (
+                        <div className="grim-ministat">
+                          <div className="grim-dim">ARMURE</div>
+                          <div className="grim-ink">+{(sel as ArmorDef).armor}</div>
+                        </div>
+                      )}
                     </div>
                     <div className="grim-desc">{sel.desc}</div>
                     <div className="grim-actions">
                       {sel.kind === "weapon" && (
                         <button className="grim-btn grim-btn--gold" onClick={equipSel}>
                           {selIsEquipped ? "RETIRER" : "ÉQUIPER"}
+                        </button>
+                      )}
+                      {sel.kind === "armor" && (
+                        <button className="grim-btn grim-btn--gold" onClick={equipSel}>
+                          {selIsArmorEquipped ? "RETIRER" : "ÉQUIPER"}
                         </button>
                       )}
                       {sel.kind === "potion" && (
@@ -486,7 +555,9 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp }: Props) 
             <Equip
               inv={inv}
               equipped={equipped}
+              equippedArmor={equippedArmor}
               hasWeapon={hasWeaponEquipped}
+              ac={ac}
               dragSlot={dragSlot}
             />
           )}
@@ -580,21 +651,25 @@ const SILHOUETTE =
 function Equip({
   inv,
   equipped,
+  equippedArmor,
   hasWeapon,
+  ac,
   dragSlot,
 }: {
   inv: ReturnType<typeof getInventory>;
   equipped: WeaponDef;
+  equippedArmor: Partial<Record<ArmorSlot, ArmorDef>>;
   hasWeapon: boolean;
+  ac: number;
   dragSlot: React.MutableRefObject<number | null>;
 }) {
-  // Sac « équipable » = armes en inventaire non équipées (seules les armes le sont
-  // pour l'instant ; armures à venir, cf. docs/todo-ui-rpg.md).
+  // Sac « équipable » = armes et armures en inventaire non équipées
   const bag = inv.items
     .map((item, index) => ({ item, index }))
     .filter(
       (e): e is { item: ItemDef; index: number } =>
-        e.item.kind === "weapon" && e.item !== equipped
+        (e.item.kind === "weapon" && e.item !== equipped) ||
+        (e.item.kind === "armor" && !Object.values(equippedArmor).some((a: ArmorDef | undefined) => a === e.item))
     );
 
   const dropWeapon = (e: React.DragEvent) => {
@@ -605,6 +680,31 @@ function Equip({
     if (it && it.kind === "weapon") equipWeapon(index);
   };
 
+  // Drop handler pour les armures
+  const dropArmor = (slot: ArmorSlot) => (e: React.DragEvent) => {
+    e.preventDefault();
+    const index = dragSlot.current;
+    if (index == null) return;
+    const it = inv.items[index];
+    if (it && it.kind === "armor" && it.slot === slot) {
+      equipArmor(index);
+    }
+  };
+
+  // Mapping entre les slots du paper-doll et les ArmorSlot
+  const DOLL_TO_ARMOR_SLOT: Record<string, ArmorSlot | null> = {
+    head: "head",
+    chest: "chest",
+    legs: "legs",
+    gloves: "gloves",
+    feet: "feet",
+    leftHand: "shield",
+    cloak: "cloak",
+    rightHand: null,
+    amulet: null,
+    ring1: null,
+  };
+
   return (
     <div className="grim-equip">
       {/* gauche : sac équipable */}
@@ -612,7 +712,7 @@ function Equip({
         <div className="grim-coltitle">ÉQUIPABLE · glissez →</div>
         <div className="grim-bag">
           {bag.length === 0 ? (
-            <div className="grim-empty">Aucune arme à équiper.</div>
+            <div className="grim-empty">Aucun objet à équiper.</div>
           ) : (
             bag.map(({ item, index }) => (
               <div
@@ -623,12 +723,15 @@ function Equip({
                   dragSlot.current = index;
                   e.dataTransfer.effectAllowed = "move";
                 }}
-                onClick={() => equipWeapon(index)}
+                onClick={() => {
+                  if (item.kind === "weapon") equipWeapon(index);
+                  else if (item.kind === "armor") equipArmor(index);
+                }}
                 title={`Équiper — ${item.name}`}
               >
                 <span style={itemIcon(item, 22)} />
                 <span className="grim-bagitem-name">{item.name}</span>
-                <span className="grim-dim">Arme</span>
+                <span className="grim-dim">{TYPE_LABEL[item.kind]}</span>
               </div>
             ))
           )}
@@ -642,19 +745,41 @@ function Equip({
           <div className="grim-doll-cap">▣ figurine</div>
           {DOLL_SLOTS.map((s) => {
             const isWeapon = s.key === "rightHand";
-            const filled = isWeapon && hasWeapon;
+            const armorSlot = DOLL_TO_ARMOR_SLOT[s.key];
+            const slotArmor = armorSlot ? equippedArmor[armorSlot] || null : null;
+            const filled = isWeapon ? hasWeapon : slotArmor !== null;
+            const itemToShow = isWeapon ? equipped : slotArmor;
+            
             return (
               <div
                 key={s.key}
                 className={`grim-eqslot${filled ? " grim-eqslot--filled" : ""}`}
                 style={{ top: s.top, left: s.left }}
-                onDragOver={isWeapon ? (e) => e.preventDefault() : undefined}
-                onDrop={isWeapon ? dropWeapon : undefined}
-                onClick={filled ? () => unequipWeapon() : undefined}
-                title={filled ? `${equipped.name} — clic pour retirer` : s.label}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  const dragIndex = dragSlot.current;
+                  if (dragIndex != null) {
+                    const draggedItem = inv.items[dragIndex];
+                    if (isWeapon && draggedItem?.kind === "weapon") {
+                      e.dataTransfer.effectAllowed = "move";
+                      return;
+                    }
+                    if (armorSlot && draggedItem?.kind === "armor" && draggedItem.slot === armorSlot) {
+                      e.dataTransfer.effectAllowed = "move";
+                      return;
+                    }
+                  }
+                  e.dataTransfer.effectAllowed = "none";
+                }}
+                onDrop={isWeapon ? dropWeapon : (armorSlot ? dropArmor(armorSlot) : undefined)}
+                onClick={filled ? () => {
+                  if (isWeapon) unequipWeapon();
+                  else if (armorSlot && itemToShow) unequipArmor(armorSlot);
+                } : undefined}
+                title={filled ? `${itemToShow!.name} — clic pour retirer` : s.label}
               >
-                {filled ? (
-                  <span style={itemIcon(equipped, 34)} />
+                {filled && itemToShow ? (
+                  <span style={itemIcon(itemToShow, 34)} />
                 ) : (
                   <span className="grim-eqslot-label">{s.label}</span>
                 )}
@@ -668,7 +793,7 @@ function Equip({
       <div className="grim-defense">
         <div className="grim-ac">
           <div className="grim-dim">CLASSE D'ARMURE</div>
-          <div className="grim-ac-val">10</div>
+          <div className="grim-ac-val">{ac}</div>
         </div>
         <div className="grim-rule" />
         <div className="grim-def-row">
@@ -681,14 +806,26 @@ function Equip({
         </div>
         <div className="grim-dim grim-def-label">PROTECTION PAR PIÈCE</div>
         <div className="grim-def-list">
-          {["Tête", "Torse", "Jambes", "Mains", "Pieds", "Bouclier"].map((l) => (
-            <div key={l} className="grim-def-row grim-def-row--sm">
-              <span className="grim-dim">{l}</span>
-              <span className="grim-dim">— vide</span>
-            </div>
-          ))}
+          {[
+            { label: "Tête", slot: "head" as ArmorSlot },
+            { label: "Torse", slot: "chest" as ArmorSlot },
+            { label: "Jambes", slot: "legs" as ArmorSlot },
+            { label: "Mains", slot: "gloves" as ArmorSlot },
+            { label: "Pieds", slot: "feet" as ArmorSlot },
+            { label: "Bouclier", slot: "shield" as ArmorSlot },
+            { label: "Cape", slot: "cloak" as ArmorSlot },
+          ].map(({ label, slot }) => {
+            const armor = equippedArmor[slot];
+            return (
+              <div key={slot} className="grim-def-row grim-def-row--sm">
+                <span className="grim-dim">{label}</span>
+                <span className={armor ? "grim-gold-val" : "grim-dim"}>
+                  {armor ? `+${armor.armor}` : "— vide"}
+                </span>
+              </div>
+            );
+          })}
         </div>
-        <div className="grim-note grim-note--center">Armures &amp; boucliers à venir.</div>
       </div>
     </div>
   );

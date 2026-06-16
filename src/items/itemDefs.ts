@@ -1,6 +1,10 @@
 import type { WeaponCategory } from "../combat/skills";
 
-export type ItemKind = "weapon" | "potion";
+export type ItemKind = "weapon" | "potion" | "armor";
+
+export type ArmorSlot = "head" | "chest" | "legs" | "gloves" | "feet" | "shield" | "cloak";
+
+export type ArmorClass = "light" | "heavy";
 
 /**
  * Champs « fiche d'objet » communs (cf. UI Grimoire) : poids, valeur marchande et
@@ -43,7 +47,16 @@ export interface PotionDef extends ItemMeta {
   heal: number;
 }
 
-export type ItemDef = WeaponDef | PotionDef;
+export interface ArmorDef extends ItemMeta {
+  kind: "armor";
+  id: string;
+  name: string;
+  slot: ArmorSlot;
+  armor: number;
+  armorClass: ArmorClass;
+}
+
+export type ItemDef = WeaponDef | PotionDef | ArmorDef;
 
 export const ITEMS: Record<string, ItemDef> = {
   fists: {
@@ -79,16 +92,96 @@ export const ITEMS: Record<string, ItemDef> = {
     kind: "potion", id: "potion_large", name: "Potion (grande)",
     heal: 60, weight: 1, value: 70, desc: "Élixir épais et sucré. Restaure 60 points de vie.",
   },
+  // ==========================================================================
+  // Armures — Light (cuir)
+  // ==========================================================================
+  leather_cap: {
+    kind: "armor", id: "leather_cap", name: "Capuche de cuir", slot: "head",
+    armor: 1, armorClass: "light",
+    weight: 1.5, value: 25, desc: "Cuir souple traité. Protège du vent et des coups légers.",
+  },
+  leather_vest: {
+    kind: "armor", id: "leather_vest", name: "Gilet de cuir", slot: "chest",
+    armor: 2, armorClass: "light",
+    weight: 4, value: 60, desc: "Veste en cuir renforcé. Résiste aux entailles.",
+  },
+  leather_leggings: {
+    kind: "armor", id: "leather_leggings", name: "Jambières de cuir", slot: "legs",
+    armor: 1, armorClass: "light",
+    weight: 2.5, value: 40, desc: "Jambières souples. Bonne mobilité.",
+  },
+  leather_gloves: {
+    kind: "armor", id: "leather_gloves", name: "Gants de cuir", slot: "gloves",
+    armor: 1, armorClass: "light",
+    weight: 1, value: 20, desc: "Gants légers. Ne gènent pas la préhension.",
+  },
+  leather_boots: {
+    kind: "armor", id: "leather_boots", name: "Bottes de cuir", slot: "feet",
+    armor: 1, armorClass: "light",
+    weight: 2, value: 30, desc: "Bottes montantes. Silencieuses et agiles.",
+  },
+  small_shield: {
+    kind: "armor", id: "small_shield", name: "Petit bouclier", slot: "shield",
+    armor: 2, armorClass: "light",
+    weight: 3, value: 50, desc: "Bouclier rond en bois renforcé. Léger mais efficace.",
+  },
+  traveler_cloak: {
+    kind: "armor", id: "traveler_cloak", name: "Cape du voyageur", slot: "cloak",
+    armor: 1, armorClass: "light",
+    weight: 1, value: 25, desc: "Cape en laine épaisse. Détourne les flèches occasionnelles.",
+  },
+  // ==========================================================================
+  // Armures — Heavy (mailles/plates)
+  // ==========================================================================
+  iron_helmet: {
+    kind: "armor", id: "iron_helmet", name: "Heaume de fer", slot: "head",
+    armor: 2, armorClass: "heavy",
+    weight: 5, value: 80, desc: "Casque lourd. Très résistant aux coups à la tête.",
+  },
+  chainmail: {
+    kind: "armor", id: "chainmail", name: "Cotte de mailles", slot: "chest",
+    armor: 4, armorClass: "heavy",
+    weight: 12, value: 150, desc: "Mailles entrelacées. Excellente protection du torse.",
+  },
+  plate_leggings: {
+    kind: "armor", id: "plate_leggings", name: "Jambières de plaques", slot: "legs",
+    armor: 2, armorClass: "heavy",
+    weight: 8, value: 100, desc: "Plaques rivetées. Protègent bien les jambes.",
+  },
+  iron_gauntlets: {
+    kind: "armor", id: "iron_gauntlets", name: "Gantelets de fer", slot: "gloves",
+    armor: 1, armorClass: "heavy",
+    weight: 3, value: 45, desc: "Gants métalliques. Lourds mais solides.",
+  },
+  iron_boots: {
+    kind: "armor", id: "iron_boots", name: "Bottes de fer", slot: "feet",
+    armor: 2, armorClass: "heavy",
+    weight: 5, value: 60, desc: "Bottes renforcées. Les orteils sont en sécurité.",
+  },
+  tower_shield: {
+    kind: "armor", id: "tower_shield", name: "Bouclier tour", slot: "shield",
+    armor: 3, armorClass: "heavy",
+    weight: 8, value: 120, desc: "Grand bouclier rectangulaire. Bloque presque tout.",
+  },
 };
 
 /** Loot table d'un ennemi : retourne 0-2 items selon un seed. */
 export function rollLoot(rng: () => number): ItemDef[] {
   const weapons: ItemDef[] = [ITEMS.sword_iron, ITEMS.sword_bone, ITEMS.axe_crude];
   const potions: ItemDef[] = [ITEMS.potion_small, ITEMS.potion_large];
+  // Armures : mélange light et heavy pour chaque slot
+  const armors: ItemDef[] = [
+    ITEMS.leather_cap, ITEMS.leather_vest, ITEMS.leather_leggings, ITEMS.leather_gloves,
+    ITEMS.leather_boots, ITEMS.small_shield, ITEMS.traveler_cloak,
+    ITEMS.iron_helmet, ITEMS.chainmail, ITEMS.plate_leggings, ITEMS.iron_gauntlets,
+    ITEMS.iron_boots, ITEMS.tower_shield,
+  ];
   const result: ItemDef[] = [];
   // 55% de chance d'avoir une arme
   if (rng() < 0.55) result.push(weapons[Math.floor(rng() * weapons.length)]);
   // 40% de chance d'avoir une potion
   if (rng() < 0.40) result.push(potions[Math.floor(rng() * potions.length)]);
+  // 30% de chance d'avoir une armure
+  if (rng() < 0.30) result.push(armors[Math.floor(rng() * armors.length)]);
   return result;
 }

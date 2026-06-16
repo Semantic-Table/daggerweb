@@ -56,6 +56,21 @@ export const ENEMY_ATTACK_DIST = 1.7;
 export const ENEMY_ATTACK_CD = 1;
 export const ENEMY_ATTACK_DMG = 8;
 
+// ==========================================================================
+// Armures (cf. docs/roadmap-armures.md)
+// ==========================================================================
+
+// Base AC (sans armure)
+export const BASE_AC = 10;
+
+// Mitigation : réduction plate des dégâts
+// dégâts_subis = max(1, dégâts_entrants - (AC - BASE_AC))
+
+// Équilibrage : AC typique pour tester
+// - Cuir léger : AC 10-13 (1-3 points)
+// - Mailles/Plates : AC 14-20 (4-10 points)
+export const ARMOR_TEST_TARGET_AC = 15;
+
 // Épée
 export const SWORD_REACH = 2.6;
 export const SWORD_FIST_REACH = 1.9;
