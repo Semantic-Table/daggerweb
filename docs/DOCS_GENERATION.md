@@ -126,6 +126,10 @@ export interface DungeonData {
   exit: [number, number, number];  // Position du seuil de sortie
   exitRot: number;               // Orientation du seuil (Y)
   size: number;                   // Taille de la grille
+  seed: number;                   // Seed utilisée pour la génération
+  wallType: WallBlockType;        // Type de mur unique du donjon (cf. blockTypes.ts)
+  floorType: FloorBlockType;      // Type de sol unique du donjon
+  ceilingType: CeilingBlockType;  // Type de plafond ("none" = zone ouverte)
 }
 
 export interface WallPanel {
@@ -147,7 +151,11 @@ export interface WallPanel {
   "spawn": [0, 1.6, 0],
   "exit": [20, 0, 0],
   "exitRot": 0,
-  "size": 24
+  "size": 24,
+  "seed": 42,
+  "wallType": "brick",
+  "floorType": "tiles",
+  "ceilingType": "stone"
 }
 ```
 

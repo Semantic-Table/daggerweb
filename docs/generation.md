@@ -20,20 +20,40 @@ convexe par mesh automatiquement (tours, colonnes, rochers — rien n'est oubli�
 
 ## Donjon (`gen/dungeonGen.ts`)
 
-Approche **block-based** simplifiée (cf. GDD §4), grille 24×24 :
+Approche **block-based** simplifiée (cf. GDD §4), grille 24×24 (constantes dans
+`src/config.ts`) :
 
 1. **Creusement** par « marches ivres » (drunkard's walk) depuis le centre +
    quelques salles rectangulaires → cellules praticables.
 2. **Murs** : pour chaque cellule de sol, un panneau sur chaque côté bordant le vide.
-3. **Ennemis** : quelques cases praticables tirées au sort à > 12 m du point d'entrée.
+3. **Type de bloc** : un seul type de mur / sol / plafond est tiré par donjon
+   (déterministe, dérivé de la seed) depuis `gen/blockTypes.ts`. Le plafond peut être
+   `"none"` (zone ouverte).
+4. **Ennemis** : quelques cases praticables tirées au sort à > 12 m du point d'entrée.
 
-Renvoie `{ floors, panels, enemies, spawn, size }`. Le rendu (`components/Dungeon.tsx`)
-instancie sol/plafond/murs (3 draw calls) et pose un `CuboidCollider` orienté par
-panneau + un grand collider de sol.
+Renvoie `{ floors, panels, enemies, spawn, exit, exitRot, size, seed, wallType,
+floorType, ceilingType }`. Le rendu (`components/Dungeon.tsx`) instancie sol/plafond/murs
+(matériaux issus du type de bloc) et pose un `CuboidCollider` orienté par panneau + un
+grand collider de sol. La sortie (`exit`/`exitRot`) est matérialisée par
+`components/ExitPortal.tsx`.
 
-> **Limite actuelle** : le donjon est une grille creusée, pas encore le vrai système
-> de **modules à connecteurs** décrit au GDD §4 (couloir/angle/T/salle chaînés par
-> points d'accroche). C'est le gros morceau technique restant — voir `roadmap.md`.
+### Blocs (`gen/blockTypes.ts`)
+
+Catalogue purement procédural (couleurs/rugosité, pas d'assets) : 7 types de murs,
+7 de sols, 5 de plafonds, plus une ébauche de pièges (`TRAP_TYPES`) et de presets de
+biome (`BIOME_PRESETS`, `getBlockTypeForBiome`) prévus pour lier le style au type
+d'entrée — non encore branchés sur `dungeonGen` (qui tire un type au hasard, sans
+distinction de biome).
+
+> **Limite actuelle** : le donjon est une grille creusée à blocs colorés, pas encore le
+> vrai système de **modules à connecteurs** décrit au GDD §4 (couloir/angle/T/salle
+> chaînés par points d'accroche). C'est le gros morceau technique restant — voir
+> `roadmap.md`.
+
+### Noms (`gen/dungeonNames.ts`)
+
+Nom déterministe par donjon : préfixe + suffixe combinés selon le type d'entrée et la
+seed (même seed ⇒ même nom).
 
 ## Étendre
 
