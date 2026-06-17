@@ -22,26 +22,26 @@ export function Dungeon({ data }: { data: DungeonData }) {
 
   return (
     <group>
-      {/* Sol (instancié - un seul type pour tout le donjon). */}
-      {data.ceilingType !== "none" && (
-        <Instances limit={data.floors.length}>
-          <planeGeometry args={[CELL, CELL]} />
-          <meshStandardMaterial 
-            color={floorAppearance.color} 
-            roughness={floorAppearance.roughness}
-            metalness={floorAppearance.metalness || 0}
+      {/* Sol (instancié - un seul type pour tout le donjon). Toujours rendu :
+          un donjon a toujours un sol, même les grottes sans plafond. */}
+      <Instances limit={data.floors.length}>
+        <planeGeometry args={[CELL, CELL]} />
+        <meshStandardMaterial
+          color={floorAppearance.color}
+          roughness={floorAppearance.roughness}
+          metalness={floorAppearance.metalness || 0}
+        />
+        {data.floors.map(([x, z], i) => (
+          <Instance
+            key={i}
+            position={[x, 0, z]}
+            rotation={[-Math.PI / 2, 0, 0]}
           />
-          {data.floors.map(([x, z], i) => (
-            <Instance 
-              key={i} 
-              position={[x, 0, z]} 
-              rotation={[-Math.PI / 2, 0, 0]} 
-            />
-          ))}
-        </Instances>
-      )}
+        ))}
+      </Instances>
 
-      {/* Plafond (instancié - un seul type pour tout le donjon). */}
+      {/* Plafond (instancié - un seul type pour tout le donjon).
+          Absent quand le biome est à ciel ouvert (ceilingType === "none"). */}
       {data.ceilingType !== "none" && (
         <Instances limit={data.floors.length}>
           <planeGeometry args={[CELL, CELL]} />

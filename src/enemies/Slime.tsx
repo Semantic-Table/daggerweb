@@ -1,13 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { enemyRegistry, type EnemyHandle } from "../combat/enemyRegistry";
 import { playerPos } from "../combat/playerState";
 import { damagePlayer } from "../combat/playerCombat";
-import { corpseRegistry, type CorpseHandle } from "../combat/corpseRegistry";
-import { gameState } from "../combat/gameState";
-import { rollLoot } from "../items/itemDefs";
+import { useEnemyAI } from "./useEnemyAI";
 import { ENEMY_TYPES } from "./enemyTypes";
 
 // Configuration spécifique au Slime
@@ -92,19 +89,8 @@ export function Slime({ spawn, index }: { spawn: [number, number]; index: number
   const corpseGroup = useRef<THREE.Group>(null);
   const eyeGroupRef = useRef<THREE.Group>(null);
   
-  const hp = useRef(SLIME_HP);
-  const dead = useRef(false);
-  const deathT = useRef(0);
-  const flash = useRef(0);
-  const atkCd = useRef(0);
   const pulsePhase = useRef(Math.random() * Math.PI * 2);
-  const [looted, setLooted] = useState(false);
-  const tmp = useMemo(() => new THREE.Vector3(), []);
-  
-  const pendingHits = useRef<{ dx: number; dz: number; dmg: number }[]>([]);
-  const handleRef = useRef<EnemyHandle | null>(null);
-  const corpseHandleRef = useRef<CorpseHandle | null>(null);
-  
+
   // Projectiles actifs
   const [projectiles, setProjectiles] = useState<{
     position: THREE.Vector3;
@@ -112,11 +98,6 @@ export function Slime({ spawn, index }: { spawn: [number, number]; index: number
     id: number;
   }[]>([]);
 
-  // Seed de loot
-  const lootSeed = useRef(
-    (((Math.round(spawn[0] * 100) * 73856093) ^ (Math.round(spawn[1] * 100) * 19349663) ^ (index * 83492791)) >>> 0) % 0xffffff
-  );
-  
   // Variation visuelle
   const variant = useMemo(() => {
     let s = (Math.floor(Math.abs(spawn[0] * 131 + spawn[1] * 57)) % 9973) + 1;
@@ -160,141 +141,60 @@ export function Slime({ spawn, index }: { spawn: [number, number]; index: number
     setProjectiles(prev => prev.filter(p => p.id !== id));
   };
 
-  useEffect(() => {
-    const handle: EnemyHandle = {
-      getPosition: (out) => {
+  const { looted } = useEnemyAI({
+    spawn,
+    index,
+    body,
+    corpseGroup,
+    stats: {
+      hp: SLIME_HP,
+      speed: SLIME_SPEED,
+      stopDist: SLIME_STOP_DIST,
+      attackDist: SLIME_ATTACK_DIST,
+      attackCd: SLIME_ATTACK_CD,
+      attackDmg: SLIME_ATTACK_DMG,
+      armor: slimeType.stats.armor,
+      walkSpeed: slimeType.animations.walkSpeed,
+      attackAnimSpeed: slimeType.animations.attackAnimSpeed,
+      deathSpeed: slimeType.animations.deathSpeed,
+    },
+    // Le slime rebondit fort quand il est frappé.
+    knockback: { xz: 2, y: 2.5 },
+    // Attaque à distance : ne crache pas au contact (rester au-delà de 1.5).
+    minAttackDist: 1.5,
+    onAttack: (nx, nz) => {
+      const t = body.current?.translation();
+      if (!t) return;
+      addProjectile(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(nx, 0, nz));
+    },
+    onFlash: (f) => {
+      if (mainMeshRef.current) {
+        const m = mainMeshRef.current.material as THREE.MeshStandardMaterial;
+        m.emissiveIntensity = f * 0.8 + (looted ? 0 : slimeType.appearance.emissiveIntensity || 0);
+      }
+    },
+    // Mort : le slime s'aplatit et s'étale en largeur.
+    onDeath: (g, e) => {
+      g.scale.set(1 + e * 0.8, 1 - e * slimeType.animations.deathSquash, 1 + e * 0.8);
+      g.position.y = -e * 0.3;
+    },
+    onAnimate: ({ dt, dist }) => {
+      // Pulsation (le slime gonfle/dégonfle en permanence).
+      pulsePhase.current += dt * variant.pulseSpeed;
+      const pulse = Math.sin(pulsePhase.current) * 0.05;
+      if (mainMeshRef.current) {
+        mainMeshRef.current.scale.set(1 + pulse * 0.5, 1 + pulse, 1 + pulse * 0.5);
+      }
+      // Rebond en marchant.
+      if (dist > SLIME_STOP_DIST && corpseGroup.current) {
         const t = body.current?.translation();
-        return t ? out.set(t.x, t.y, t.z) : out;
-      },
-      hit: (dx, dz, dmg) => {
-        if (dead.current) return;
-        pendingHits.current.push({ dx, dz, dmg: dmg * (1 - slimeType.stats.armor) });
-      },
-    };
-    handleRef.current = handle;
-    enemyRegistry.add(handle);
-    return () => {
-      enemyRegistry.delete(handle);
-      if (corpseHandleRef.current) corpseRegistry.delete(corpseHandleRef.current);
-    };
-  }, []);
-
-  function die() {
-    dead.current = true;
-    if (handleRef.current) enemyRegistry.delete(handleRef.current);
-    setTimeout(() => {
-      const mesh = corpseGroup.current;
-      if (!mesh) return;
-      let s = lootSeed.current;
-      const rng = () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
-      const loot = rollLoot(rng);
-      const handle: CorpseHandle = {
-        mesh,
-        loot,
-        looted: false,
-        markLooted: () => {
-          handle.looted = true;
-          setLooted(true);
-        },
-      };
-      corpseHandleRef.current = handle;
-      corpseRegistry.add(handle);
-    }, 600);
-  }
-
-  useFrame((_, dt) => {
-    const b = body.current;
-    if (!b) return;
-
-    if (gameState.paused) {
-      b.setLinvel({ x: 0, y: 0, z: 0 }, false);
-      b.setAngvel({ x: 0, y: 0, z: 0 }, false);
-      return;
-    }
-
-    // Flash de coup
-    if (mainMeshRef.current) {
-      flash.current = Math.max(0, flash.current - dt * 4);
-      const mat = mainMeshRef.current.material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = flash.current * 0.8 + (looted ? 0 : slimeType.appearance.emissiveIntensity || 0);
-    }
-
-    // Application des coups
-    while (pendingHits.current.length > 0 && !dead.current) {
-      const h = pendingHits.current.shift()!;
-      hp.current -= h.dmg;
-      flash.current = 1;
-      // Le slime rebondit quand il est frappé
-      b.applyImpulse({ x: h.dx * 2, y: 2.5, z: h.dz * 2 }, true);
-      if (hp.current <= 0) die();
-    }
-
-    // Mort - éclate et s'aplatit
-    if (dead.current) {
-      const g = corpseGroup.current;
-      if (g) {
-        deathT.current = Math.min(1, deathT.current + dt * slimeType.animations.deathSpeed);
-        const e = deathT.current;
-        // Le slime s'aplatit et grandit en largeur
-        g.scale.set(1 + e * 0.8, 1 - e * slimeType.animations.deathSquash, 1 + e * 0.8);
-        g.position.y = -e * 0.3;
+        if (t) corpseGroup.current.position.y = t.y + Math.sin(Date.now() * 0.003) * variant.bounceAmplitude;
       }
-      const lv = b.linvel();
-      b.setLinvel({ x: 0, y: lv.y, z: 0 }, true);
-      return;
-    }
-
-    // Poursuite
-    const t = b.translation();
-    tmp.set(playerPos.x - t.x, 0, playerPos.z - t.z);
-    const d = tmp.length();
-
-    if (corpseGroup.current && d > 0.001) {
-      corpseGroup.current.rotation.y = Math.atan2(playerPos.x - t.x, playerPos.z - t.z);
-    }
-    
-    const v = b.linvel();
-    if (d > SLIME_STOP_DIST) {
-      tmp.normalize().multiplyScalar(SLIME_SPEED);
-      b.setLinvel({ x: tmp.x, y: v.y, z: tmp.z }, true);
-    } else {
-      b.setLinvel({ x: 0, y: v.y, z: 0 }, true);
-    }
-
-    // Attaque à distance - crache de l'acide
-    atkCd.current -= dt;
-    if (d <= SLIME_ATTACK_DIST && d > 1.5 && atkCd.current <= 0) {
-      // Calculer la direction vers le joueur
-      const dir = new THREE.Vector3(playerPos.x - t.x, 0, playerPos.z - t.z).normalize();
-      addProjectile(new THREE.Vector3(t.x, t.y, t.z), dir);
-      atkCd.current = SLIME_ATTACK_CD;
-    }
-
-    // Animation de pulsation (le slime gonfle/dégonfle)
-    pulsePhase.current += dt * variant.pulseSpeed;
-    const pulse = Math.sin(pulsePhase.current) * 0.05;
-    
-    if (mainMeshRef.current) {
-      mainMeshRef.current.scale.set(
-        1 + pulse * 0.5,
-        1 + pulse,
-        1 + pulse * 0.5
-      );
-    }
-
-    // Animation de rebond en marchant
-    const isMoving = d > SLIME_STOP_DIST;
-    if (isMoving) {
-      const bounce = Math.sin(Date.now() * 0.003) * variant.bounceAmplitude;
-      if (corpseGroup.current) {
-        corpseGroup.current.position.y = t.y + bounce;
+      // Yeux qui flottent légèrement.
+      if (eyeGroupRef.current && variant.hasEyes) {
+        eyeGroupRef.current.position.y = 0.15 + Math.sin(Date.now() * 0.002) * 0.02;
       }
-    }
-
-    // Animation des yeux (si présents)
-    if (eyeGroupRef.current && variant.hasEyes) {
-      eyeGroupRef.current.position.y = 0.15 + Math.sin(Date.now() * 0.002) * 0.02;
-    }
+    },
   });
 
   return (

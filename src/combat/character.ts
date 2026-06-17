@@ -348,6 +348,14 @@ function initCharacter(): void {
     state.attrs[attr] = Math.max(ATTR_BASE, Math.min(ATTR_CAP, state.attrs[attr]));
   }
   state.stamina = Math.max(0, Math.min(1, state.stamina));
+
+  // Synchroniser le suivi des paliers avec la pratique chargée. `attrs` (persisté)
+  // inclut déjà les niveaux gagnés ; si `lastAttrLevel` restait à 0, le prochain
+  // gainAttrPractice recalculerait tous les paliers comme « nouveaux » et
+  // réappliquerait les montées (double comptage). On l'aligne donc sur l'état réel.
+  for (const attr of Object.keys(state.attrs) as Attr[]) {
+    lastAttrLevel[attr] = attrLevel(attr);
+  }
   
   // Abonner à la sauvegarde automatique sur changement
   const saveOnChange = () => saveCharacter();

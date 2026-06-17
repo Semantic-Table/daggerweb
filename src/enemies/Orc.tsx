@@ -1,13 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useMemo, useRef } from "react";
 import { CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { enemyRegistry, type EnemyHandle } from "../combat/enemyRegistry";
-import { playerPos } from "../combat/playerState";
-import { damagePlayer } from "../combat/playerCombat";
-import { corpseRegistry, type CorpseHandle } from "../combat/corpseRegistry";
-import { gameState } from "../combat/gameState";
-import { rollLoot } from "../items/itemDefs";
+import { useEnemyAI } from "./useEnemyAI";
 import { ENEMY_TYPES } from "./enemyTypes";
 
 // Configuration spécifique à l'Orc
@@ -41,25 +35,6 @@ export function Orc({ spawn, index }: { spawn: [number, number]; index: number }
   const headRef = useRef<THREE.Mesh>(null);
   const axeRef = useRef<THREE.Group>(null);
   
-  const hp = useRef(ORC_HP);
-  const dead = useRef(false);
-  const deathT = useRef(0);
-  const flash = useRef(0);
-  const atkCd = useRef(0);
-  const walkPhase = useRef(0);
-  const attackAnim = useRef(0);
-  const [looted, setLooted] = useState(false);
-  const tmp = useMemo(() => new THREE.Vector3(), []);
-  
-  const pendingHits = useRef<{ dx: number; dz: number; dmg: number }[]>([]);
-  const handleRef = useRef<EnemyHandle | null>(null);
-  const corpseHandleRef = useRef<CorpseHandle | null>(null);
-  
-  // Seed de loot
-  const lootSeed = useRef(
-    (((Math.round(spawn[0] * 100) * 73856093) ^ (Math.round(spawn[1] * 100) * 19349663) ^ (index * 83492791)) >>> 0) % 0xffffff
-  );
-  
   // Variation visuelle
   const variant = useMemo(() => {
     let s = (Math.floor(Math.abs(spawn[0] * 131 + spawn[1] * 57)) % 9973) + 1;
@@ -83,173 +58,56 @@ export function Orc({ spawn, index }: { spawn: [number, number]; index: number }
     return skinColor.clone().multiplyScalar(0.65);
   }, [skinColor]);
 
-  const eyeGlow = looted ? 0 : (variant.warmEyes ? orcType.appearance.eyeGlow! * 1.3 : orcType.appearance.eyeGlow!);
-
-  useEffect(() => {
-    const handle: EnemyHandle = {
-      getPosition: (out) => {
-        const t = body.current?.translation();
-        return t ? out.set(t.x, t.y, t.z) : out;
-      },
-      hit: (dx, dz, dmg) => {
-        if (dead.current) return;
-        pendingHits.current.push({ dx, dz, dmg: dmg * (1 - orcType.stats.armor) });
-      },
-    };
-    handleRef.current = handle;
-    enemyRegistry.add(handle);
-    return () => {
-      enemyRegistry.delete(handle);
-      if (corpseHandleRef.current) corpseRegistry.delete(corpseHandleRef.current);
-    };
-  }, []);
-
-  function die() {
-    dead.current = true;
-    if (handleRef.current) enemyRegistry.delete(handleRef.current);
-    setTimeout(() => {
-      const mesh = corpseGroup.current;
-      if (!mesh) return;
-      let s = lootSeed.current;
-      const rng = () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
-      const loot = rollLoot(rng);
-      const handle: CorpseHandle = {
-        mesh,
-        loot,
-        looted: false,
-        markLooted: () => {
-          handle.looted = true;
-          setLooted(true);
-        },
-      };
-      corpseHandleRef.current = handle;
-      corpseRegistry.add(handle);
-    }, 600);
-  }
-
-  useFrame((_, dt) => {
-    const b = body.current;
-    if (!b) return;
-
-    if (gameState.paused) {
-      b.setLinvel({ x: 0, y: 0, z: 0 }, false);
-      b.setAngvel({ x: 0, y: 0, z: 0 }, false);
-      return;
-    }
-
-    // Flash de coup
-    if (mat.current) {
-      flash.current = Math.max(0, flash.current - dt * 4);
-      mat.current.emissive.setScalar(flash.current * 0.7);
-    }
-
-    // Application des coups
-    while (pendingHits.current.length > 0 && !dead.current) {
-      const h = pendingHits.current.shift()!;
-      hp.current -= h.dmg;
-      flash.current = 1;
-      b.applyImpulse({ x: h.dx * 2, y: 0.5, z: h.dz * 2 }, true);
-      if (hp.current <= 0) die();
-    }
-
-    // Mort - chute lourde
-    if (dead.current) {
-      const g = corpseGroup.current;
-      if (g) {
-        deathT.current = Math.min(1, deathT.current + dt * orcType.animations.deathSpeed);
-        const e = deathT.current;
-        g.rotation.x = e * Math.PI / 2;
-        g.rotation.z = e * 0.3;
-        g.position.y = -e * orcType.animations.deathSquash;
+  const { looted } = useEnemyAI({
+    spawn,
+    index,
+    body,
+    corpseGroup,
+    stats: {
+      hp: ORC_HP,
+      speed: ORC_SPEED,
+      stopDist: ORC_STOP_DIST,
+      attackDist: ORC_ATTACK_DIST,
+      attackCd: ORC_ATTACK_CD,
+      attackDmg: ORC_ATTACK_DMG,
+      armor: orcType.stats.armor,
+      walkSpeed: orcType.animations.walkSpeed,
+      attackAnimSpeed: orcType.animations.attackAnimSpeed,
+      deathSpeed: orcType.animations.deathSpeed,
+    },
+    knockback: { xz: 2, y: 0.5 },
+    onFlash: (f) => {
+      if (mat.current) mat.current.emissive.setScalar(f * 0.7);
+    },
+    // Chute lourde : bascule avant + léger roulis.
+    onDeath: (g, e) => {
+      g.rotation.x = (e * Math.PI) / 2;
+      g.rotation.z = e * 0.3;
+      g.position.y = -e * orcType.animations.deathSquash;
+    },
+    onAnimate: ({ ws, aa }) => {
+      if (bodyRigRef.current) {
+        bodyRigRef.current.position.y = ws * orcType.animations.walkAmplitude * 0.8;
+        bodyRigRef.current.rotation.x = aa * orcType.animations.attackLunge * 0.8;
       }
-      const lv = b.linvel();
-      b.setLinvel({ x: 0, y: lv.y, z: 0 }, true);
-      return;
-    }
-
-    // Poursuite
-    const t = b.translation();
-    tmp.set(playerPos.x - t.x, 0, playerPos.z - t.z);
-    const d = tmp.length();
-
-    if (corpseGroup.current && d > 0.001) {
-      corpseGroup.current.rotation.y = Math.atan2(playerPos.x - t.x, playerPos.z - t.z);
-    }
-    
-    const v = b.linvel();
-    if (d > ORC_STOP_DIST) {
-      tmp.normalize().multiplyScalar(ORC_SPEED);
-      b.setLinvel({ x: tmp.x, y: v.y, z: tmp.z }, true);
-    } else {
-      b.setLinvel({ x: 0, y: v.y, z: 0 }, true);
-    }
-
-    // Attaque puissante
-    atkCd.current -= dt;
-    if (d <= ORC_ATTACK_DIST && atkCd.current <= 0) {
-      damagePlayer(ORC_ATTACK_DMG);
-      atkCd.current = ORC_ATTACK_CD;
-      attackAnim.current = 1;
-    }
-
-    // Animations
-    const isMoving = d > ORC_STOP_DIST;
-    if (isMoving) walkPhase.current += dt * orcType.animations.walkSpeed;
-    const ws = isMoving ? Math.sin(walkPhase.current) : 0;
-
-    if (attackAnim.current > 0) attackAnim.current = Math.max(0, attackAnim.current - dt * orcType.animations.attackAnimSpeed);
-    const aa = Math.sin(attackAnim.current * Math.PI);
-
-    // Body rig - l'orc a des mouvements lourds
-    if (bodyRigRef.current) {
-      bodyRigRef.current.position.y = ws * orcType.animations.walkAmplitude * 0.8;
-      bodyRigRef.current.rotation.x = aa * orcType.animations.attackLunge * 0.8;
-    }
-
-    // Bras - mouvements puissants
-    if (leftArmRef.current) {
-      leftArmRef.current.rotation.set(
-        0.3 + ws * 0.5 - aa * 2.0,
-        0,
-        -0.4 + ws * 0.3
-      );
-    }
-    if (rightArmRef.current) {
-      rightArmRef.current.rotation.set(
-        0.3 - ws * 0.5 - aa * 2.0,
-        0,
-        0.4 - ws * 0.3
-      );
-    }
-
-    // Jambes - pas lourds
-    if (leftLegRef.current) {
-      leftLegRef.current.rotation.set(
-        -ws * 0.5,
-        0,
-        ws * 0.2
-      );
-    }
-    if (rightLegRef.current) {
-      rightLegRef.current.rotation.set(
-        ws * 0.5,
-        0,
-        -ws * 0.2
-      );
-    }
-
-    // Tête
-    if (headRef.current) {
-      headRef.current.rotation.x = ws * 0.03;
-    }
-
-    // Hache (animation d'attaque puissante)
-    if (axeRef.current && variant.hasAxe) {
-      axeRef.current.rotation.x = -aa * 3.0;
-      axeRef.current.position.z = 0.15 - aa * 0.5;
-      axeRef.current.position.y = -aa * 0.2;
-    }
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.set(0.3 + ws * 0.5 - aa * 2.0, 0, -0.4 + ws * 0.3);
+      }
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.set(0.3 - ws * 0.5 - aa * 2.0, 0, 0.4 - ws * 0.3);
+      }
+      if (leftLegRef.current) leftLegRef.current.rotation.set(-ws * 0.5, 0, ws * 0.2);
+      if (rightLegRef.current) rightLegRef.current.rotation.set(ws * 0.5, 0, -ws * 0.2);
+      if (headRef.current) headRef.current.rotation.x = ws * 0.03;
+      if (axeRef.current && variant.hasAxe) {
+        axeRef.current.rotation.x = -aa * 3.0;
+        axeRef.current.position.z = 0.15 - aa * 0.5;
+        axeRef.current.position.y = -aa * 0.2;
+      }
+    },
   });
+
+  const eyeGlow = looted ? 0 : (variant.warmEyes ? orcType.appearance.eyeGlow! * 1.3 : orcType.appearance.eyeGlow!);
 
   return (
     <RigidBody

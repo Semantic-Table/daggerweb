@@ -1,13 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useMemo, useRef } from "react";
 import { CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { enemyRegistry, type EnemyHandle } from "../combat/enemyRegistry";
-import { playerPos } from "../combat/playerState";
-import { damagePlayer } from "../combat/playerCombat";
-import { corpseRegistry, type CorpseHandle } from "../combat/corpseRegistry";
-import { gameState } from "../combat/gameState";
-import { rollLoot } from "../items/itemDefs";
+import { useEnemyAI } from "./useEnemyAI";
 import { ENEMY_TYPES } from "./enemyTypes";
 
 // Configuration spécifique au Loup
@@ -40,26 +34,9 @@ export function Wolf({ spawn, index }: { spawn: [number, number]; index: number 
   const rightLegFrontRef = useRef<THREE.Mesh>(null);
   const leftLegBackRef = useRef<THREE.Mesh>(null);
   const rightLegBackRef = useRef<THREE.Mesh>(null);
-  
-  const hp = useRef(WOLF_HP);
-  const dead = useRef(false);
-  const deathT = useRef(0);
-  const flash = useRef(0);
-  const atkCd = useRef(0);
-  const walkPhase = useRef(0);
-  const attackAnim = useRef(0);
-  const [looted, setLooted] = useState(false);
-  const tmp = useMemo(() => new THREE.Vector3(), []);
-  
-  const pendingHits = useRef<{ dx: number; dz: number; dmg: number }[]>([]);
-  const handleRef = useRef<EnemyHandle | null>(null);
-  const corpseHandleRef = useRef<CorpseHandle | null>(null);
-  
-  // Seed de loot
-  const lootSeed = useRef(
-    (((Math.round(spawn[0] * 100) * 73856093) ^ (Math.round(spawn[1] * 100) * 19349663) ^ (index * 83492791)) >>> 0) % 0xffffff
-  );
-  
+  // Crocs : visibles seulement pendant l'attaque (toggle dans onAnimate).
+  const fangsRef = useRef<THREE.Group>(null);
+
   // Variation visuelle
   const variant = useMemo(() => {
     let s = (Math.floor(Math.abs(spawn[0] * 131 + spawn[1] * 57)) % 9973) + 1;
@@ -86,160 +63,62 @@ export function Wolf({ spawn, index }: { spawn: [number, number]; index: number 
     return furColor.clone().multiplyScalar(1.3).lerp(new THREE.Color("#e0e0e0"), 0.4);
   }, [furColor]);
 
-  const eyeGlow = looted ? 0 : variant.eyeGlow;
-
-  useEffect(() => {
-    const handle: EnemyHandle = {
-      getPosition: (out) => {
-        const t = body.current?.translation();
-        return t ? out.set(t.x, t.y, t.z) : out;
-      },
-      hit: (dx, dz, dmg) => {
-        if (dead.current) return;
-        pendingHits.current.push({ dx, dz, dmg: dmg * (1 - wolfType.stats.armor) });
-      },
-    };
-    handleRef.current = handle;
-    enemyRegistry.add(handle);
-    return () => {
-      enemyRegistry.delete(handle);
-      if (corpseHandleRef.current) corpseRegistry.delete(corpseHandleRef.current);
-    };
-  }, []);
-
-  function die() {
-    dead.current = true;
-    if (handleRef.current) enemyRegistry.delete(handleRef.current);
-    setTimeout(() => {
-      const mesh = corpseGroup.current;
-      if (!mesh) return;
-      let s = lootSeed.current;
-      const rng = () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
-      const loot = rollLoot(rng);
-      const handle: CorpseHandle = {
-        mesh,
-        loot,
-        looted: false,
-        markLooted: () => {
-          handle.looted = true;
-          setLooted(true);
-        },
-      };
-      corpseHandleRef.current = handle;
-      corpseRegistry.add(handle);
-    }, 600);
-  }
-
-  useFrame((_, dt) => {
-    const b = body.current;
-    if (!b) return;
-
-    if (gameState.paused) {
-      b.setLinvel({ x: 0, y: 0, z: 0 }, false);
-      b.setAngvel({ x: 0, y: 0, z: 0 }, false);
-      return;
-    }
-
-    // Flash de coup
-    if (mainMeshRef.current) {
-      flash.current = Math.max(0, flash.current - dt * 4);
-      const mat = mainMeshRef.current.material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = flash.current * 1.0;
-    }
-
-    // Application des coups
-    while (pendingHits.current.length > 0 && !dead.current) {
-      const h = pendingHits.current.shift()!;
-      hp.current -= h.dmg;
-      flash.current = 1;
-      b.applyImpulse({ x: h.dx * 3, y: 1.0, z: h.dz * 3 }, true);
-      if (hp.current <= 0) die();
-    }
-
-    // Mort - chute sur le côté
-    if (dead.current) {
-      const g = corpseGroup.current;
-      if (g) {
-        deathT.current = Math.min(1, deathT.current + dt * wolfType.animations.deathSpeed);
-        const e = deathT.current;
-        g.rotation.x = e * Math.PI / 2;
-        g.rotation.z = e * 0.8;
-        g.position.y = -e * wolfType.animations.deathSquash;
+  const { looted } = useEnemyAI({
+    spawn,
+    index,
+    body,
+    corpseGroup,
+    stats: {
+      hp: WOLF_HP,
+      speed: WOLF_SPEED,
+      stopDist: WOLF_STOP_DIST,
+      attackDist: WOLF_ATTACK_DIST,
+      attackCd: WOLF_ATTACK_CD,
+      attackDmg: WOLF_ATTACK_DMG,
+      armor: wolfType.stats.armor,
+      walkSpeed: wolfType.animations.walkSpeed,
+      attackAnimSpeed: wolfType.animations.attackAnimSpeed,
+      deathSpeed: wolfType.animations.deathSpeed,
+    },
+    knockback: { xz: 3, y: 1.0 },
+    onFlash: (f) => {
+      if (mainMeshRef.current) {
+        const m = mainMeshRef.current.material as THREE.MeshStandardMaterial;
+        m.emissiveIntensity = f;
       }
-      const lv = b.linvel();
-      b.setLinvel({ x: 0, y: lv.y, z: 0 }, true);
-      return;
-    }
-
-    // Poursuite
-    const t = b.translation();
-    tmp.set(playerPos.x - t.x, 0, playerPos.z - t.z);
-    const d = tmp.length();
-
-    if (corpseGroup.current && d > 0.001) {
-      corpseGroup.current.rotation.y = Math.atan2(playerPos.x - t.x, playerPos.z - t.z);
-    }
-    
-    const v = b.linvel();
-    if (d > WOLF_STOP_DIST) {
-      tmp.normalize().multiplyScalar(WOLF_SPEED);
-      b.setLinvel({ x: tmp.x, y: v.y, z: tmp.z }, true);
-    } else {
-      b.setLinvel({ x: 0, y: v.y, z: 0 }, true);
-    }
-
-    // Attaque - morsure
-    atkCd.current -= dt;
-    if (d <= WOLF_ATTACK_DIST && atkCd.current <= 0) {
-      damagePlayer(WOLF_ATTACK_DMG);
-      atkCd.current = WOLF_ATTACK_CD;
-      attackAnim.current = 1;
-    }
-
-    // Animations
-    const isMoving = d > WOLF_STOP_DIST;
-    if (isMoving) walkPhase.current += dt * wolfType.animations.walkSpeed;
-    const ws = isMoving ? Math.sin(walkPhase.current) : 0;
-
-    if (attackAnim.current > 0) attackAnim.current = Math.max(0, attackAnim.current - dt * wolfType.animations.attackAnimSpeed);
-    const aa = Math.sin(attackAnim.current * Math.PI);
-
-    // Body rig
-    if (bodyRigRef.current) {
-      bodyRigRef.current.position.y = ws * wolfType.animations.walkAmplitude * 1.5;
-      bodyRigRef.current.rotation.x = aa * wolfType.animations.attackLunge * 0.5;
-    }
-
-    // Tête - regard haut/bas uniquement (la rotation gauche/droite est gérée par le corps)
-    if (headRef.current) {
-      headRef.current.rotation.x = ws * 0.1 - aa * 0.3;
-      // Réinitialiser la rotation Y pour éviter l'accumulation
-      headRef.current.rotation.y = 0;
-      headRef.current.rotation.z = 0;
-    }
-
-    // Queue - remue quand il court
-    if (tailRef.current) {
-      tailRef.current.rotation.x = Math.sin(walkPhase.current * 2) * 0.3 + ws * 0.2;
-      tailRef.current.rotation.y = ws * 0.3;
-    }
-
-    // Pattes avant
-    if (leftLegFrontRef.current) {
-      leftLegFrontRef.current.rotation.x = -ws * 0.8 + aa * 0.3;
-    }
-    if (rightLegFrontRef.current) {
-      rightLegFrontRef.current.rotation.x = ws * 0.8 - aa * 0.3;
-    }
-
-    // Pattes arrière
-    if (leftLegBackRef.current) {
-      leftLegBackRef.current.rotation.x = ws * 0.8 + aa * 0.2;
-    }
-    if (rightLegBackRef.current) {
-      rightLegBackRef.current.rotation.x = -ws * 0.8 - aa * 0.2;
-    }
+    },
+    // Chute sur le côté : bascule avant + fort roulis.
+    onDeath: (g, e) => {
+      g.rotation.x = (e * Math.PI) / 2;
+      g.rotation.z = e * 0.8;
+      g.position.y = -e * wolfType.animations.deathSquash;
+    },
+    onAnimate: ({ ws, aa, phase }) => {
+      if (bodyRigRef.current) {
+        bodyRigRef.current.position.y = ws * wolfType.animations.walkAmplitude * 1.5;
+        bodyRigRef.current.rotation.x = aa * wolfType.animations.attackLunge * 0.5;
+      }
+      // Tête : regard haut/bas seulement (le corps gère la rotation latérale).
+      if (headRef.current) {
+        headRef.current.rotation.x = ws * 0.1 - aa * 0.3;
+        headRef.current.rotation.y = 0;
+        headRef.current.rotation.z = 0;
+      }
+      // Queue : remue quand il court.
+      if (tailRef.current) {
+        tailRef.current.rotation.x = Math.sin(phase * 2) * 0.3 + ws * 0.2;
+        tailRef.current.rotation.y = ws * 0.3;
+      }
+      if (leftLegFrontRef.current) leftLegFrontRef.current.rotation.x = -ws * 0.8 + aa * 0.3;
+      if (rightLegFrontRef.current) rightLegFrontRef.current.rotation.x = ws * 0.8 - aa * 0.3;
+      if (leftLegBackRef.current) leftLegBackRef.current.rotation.x = ws * 0.8 + aa * 0.2;
+      if (rightLegBackRef.current) rightLegBackRef.current.rotation.x = -ws * 0.8 - aa * 0.2;
+      // Crocs visibles pendant la morsure.
+      if (fangsRef.current) fangsRef.current.visible = aa > 0.01;
+    },
   });
+
+  const eyeGlow = looted ? 0 : variant.eyeGlow;
 
   // Taille ajustée pour les loups alpha
   const finalScale = variant.scale * wolfType.scale * (variant.isAlpha ? 1.15 : 1);
@@ -393,19 +272,17 @@ export function Wolf({ spawn, index }: { spawn: [number, number]; index: number 
             <meshStandardMaterial color="#333333" metalness={0.3} />
           </mesh>
 
-          {/* Crocs visibles quand il attaque */}
-          {attackAnim.current > 0 && (
-            <>
-              <mesh position={[0.55, -0.05, 0.32]} rotation={[0.2, 0, 0]}>
-                <coneGeometry args={[0.015, 0.06, 3]} />
-                <meshStandardMaterial color="#e0e0e0" metalness={0.5} />
-              </mesh>
-              <mesh position={[0.55, -0.08, 0.32]} rotation={[-0.1, 0, 0]}>
-                <coneGeometry args={[0.015, 0.06, 3]} />
-                <meshStandardMaterial color="#e0e0e0" metalness={0.5} />
-              </mesh>
-            </>
-          )}
+          {/* Crocs visibles quand il attaque (visibilité pilotée dans onAnimate) */}
+          <group ref={fangsRef} visible={false}>
+            <mesh position={[0.55, -0.05, 0.32]} rotation={[0.2, 0, 0]}>
+              <coneGeometry args={[0.015, 0.06, 3]} />
+              <meshStandardMaterial color="#e0e0e0" metalness={0.5} />
+            </mesh>
+            <mesh position={[0.55, -0.08, 0.32]} rotation={[-0.1, 0, 0]}>
+              <coneGeometry args={[0.015, 0.06, 3]} />
+              <meshStandardMaterial color="#e0e0e0" metalness={0.5} />
+            </mesh>
+          </group>
 
           {/* Collar pour les loups alpha */}
           {variant.isAlpha && (

@@ -35,12 +35,10 @@ export function getEnemyComponent(typeId: string) {
     slime: Slime,
     orc: Orc,
     wolf: Wolf,
-    skeletonArcher: Skeleton, // À implémenter
-    troll: () => null, // À implémenter
-    spider: () => null, // À implémenter
-    necromancer: () => null, // À implémenter
+    skeletonArcher: Skeleton, // réutilise le squelette en attendant un archer dédié
   };
-  
+
+  // Type non implémenté → on retombe sur le gobelin (jamais d'ennemi invisible).
   return components[typeId] || components.goblin;
 }
 
