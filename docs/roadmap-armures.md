@@ -1,19 +1,17 @@
 # Roadmap — Équipement défensif (armures, boucliers, Classe d'armure)
 
-> Active le paper-doll, le panneau de défense et la Classe d'armure du Grimoire
-> (aujourd'hui figés : 10 cases vides, AC bloquée à 10, cf.
-> [`todo-ui-rpg.md`](todo-ui-rpg.md)). Donne au combat l'axe **défensif** qui lui
-> manque et une vraie raison de looter autre chose que des armes.
+> **✅ IMPLÉMENTÉ** — Active le paper-doll, le panneau de défense et la Classe d'armure du Grimoire
+> (cf. [`todo-ui-rpg.md`](todo-ui-rpg.md)). Donne au combat l'axe **défensif** avec mitigation
+> réelle et une vraie raison de looter autre chose que des armes.
 
-## Pourquoi c'est rentable
+## Pourquoi c'était rentable
 
-- **Tout est déjà construit** : le paper-doll (10 cases positionnées), le drag &
-  drop (la case *Arme* fonctionne déjà), le panneau CLASSE D'ARMURE + PROTECTION
-  PAR PIÈCE, la fiche d'objet. Il manque juste **les données et le câblage**.
-- **Combat** : aujourd'hui le joueur n'a que PV + i-frames. L'armure ajoute la
+- **Tout était déjà construit** : le paper-doll (10 cases positionnées), le drag &
+  drop (la case *Arme* fonctionnait déjà), le panneau CLASSE D'ARMURE + PROTECTION
+  PAR PIÈCE, la fiche d'objet. Il manquait juste **les données et le câblage**.
+- **Combat** : le joueur avait que PV + i-frames. L'armure a ajouté la
   mitigation → des choix (lourd/protecteur vs léger/rapide).
-- **Loot** : `rollLoot` ne sort qu'armes + potions ; l'armure triple l'intérêt des
-  cadavres.
+- **Loot** : `rollLoot` sort maintenant armes + potions + armures (30% de chance).
 
 ## Modèle de données
 
@@ -91,27 +89,27 @@ heavy) pour que le paper-doll soit testable de bout en bout.
 
 ## Phasage
 
-### Phase 1 — Données + équipement + UI (livrable seul, testable)
-- [ ] `ArmorDef` + `ArmorSlot` dans `itemDefs`, petit catalogue de pièces.
-- [ ] `armor` map + `equipArmor`/`unequipArmor` dans `inventory.ts`.
-- [ ] Paper-doll : 7 cases câblées (drag & drop + clic pour retirer).
-- [ ] Panneau défense réel (AC + protection par pièce) + fiche ARMURE + filtre.
-- [ ] Quelques pièces dans `rollLoot` pour tester sans triche.
+### Phase 1 — Données + équipement + UI (livrable seul, testable) ✅
+- [x] `ArmorDef` + `ArmorSlot` dans `itemDefs`, catalogue complet de pièces (cuir/fer).
+- [x] `armor` map + `equipArmor`/`unequipArmor` dans `inventory.ts`.
+- [x] Paper-doll : 7 cases câblées (drag & drop + clic pour retirer).
+- [x] Panneau défense réel (AC + protection par pièce) + fiche ARMURE + filtre.
+- [x] Armures dans `rollLoot` (30% de chance de drop).
 
   → *AC affichée et calculée, équipement fonctionnel, mais encore sans effet de
   combat. Bon point d'arrêt : la moitié visible de la feature.*
 
-### Phase 2 — Mitigation (l'AC sert enfin)
-- [ ] Appliquer la réduction de dégâts au handler joueur.
+### Phase 2 — Mitigation (l'AC sert enfin) ✅
+- [x] Appliquer la réduction de dégâts au handler joueur (`App.tsx` : `max(1, dmg - (AC - 10))`).
 - [ ] Feedback : son/flash d'armure qui encaisse distinct du flash `hurt`.
-- [ ] Équilibrer `ENEMY_ATTACK_DMG` vs AC typique (constantes `config.ts`).
+- [x] Équilibrer `ENEMY_ATTACK_DMG` vs AC typique (constantes `config.ts`).
 
 ### Phase 3 — Compétence & poids d'armure
 - [ ] Compétence d'armure (light/heavy) à l'usage : encaisser un coup donne de l'XP
       à la classe portée (réutilise `skills.ts`). Bonus = +AC effective par palier.
-- [ ] **Poids** : les armures lourdes pèsent → relie la barre CHARGE au gameplay
-      (malus de vitesse au-delà de la charge max). ⟶ synergie directe avec
-      [`roadmap-attributs.md`](roadmap-attributs.md) (Force → charge max).
+- [x] **Poids** : les armures pèsent → la barre CHARGE est reliée au gameplay via
+      `carryMax()` (basé sur FORCE) et `encumbranceMult()` dans `character.ts`.
+      ⟶ synergie avec [`roadmap-attributs.md`](roadmap-attributs.md).
 
 ### Phase 4 — Profondeur (plus tard)
 - [ ] Bijoux (anneaux/amulette) à effets (relie magie/attributs).
@@ -126,25 +124,24 @@ heavy) pour que le paper-doll soit testable de bout en bout.
 - **Calcul à la volée**, jamais de mutation des defs (discipline `skillBonus`).
 - **Armures lootables** dès la Phase 1 pour pouvoir tester.
 
-## Questions ouvertes
+## Décisions prises (implémentées)
 
-1. **Bouclier** : pièce d'armure passive (AC), ou geste actif de parade plus tard ?
-   *Suggestion : passif (AC) en Phase 1, parade = feature à part.*
-2. **Mitigation plate vs %** : voir ci-dessus. *Suggestion : plate, on rebascule
-   au tuning.*
-3. **Compétence d'armure** : un seul skill « Armure », ou light/heavy séparés
-   (gouvernés par AGI / END) ? *Suggestion : light/heavy, ça crée un vrai choix
-   d'archétype et s'arrime aux attributs.*
-4. **Mains nues + bouclier** : autorisé ? (le slot arme et le slot bouclier sont
-   indépendants). *Suggestion : oui, aucun blocage.*
+1. **Bouclier** : pièce d'armure passive (AC) — implémenté comme slot `shield` dans `ArmorDef`.
+2. **Mitigation plate vs %** : mitigation **plate** choisie (`max(1, dmg - (AC - 10))`).
+3. **Compétence d'armure** : à implémenter (light/heavy séparés, gouvernés par AGI/END).
+4. **Mains nues + bouclier** : **autorisé** — les slots arme et bouclier sont indépendants.
 
 ## Croisement avec les attributs
 
-Si la [roadmap attributs](roadmap-attributs.md) passe d'abord : Endurance peut
-majorer l'AC effective des armures lourdes, Agilité celle des légères, et Force
-porte la charge des plates sans malus. Les deux features se renforcent ; l'ordre
-n'est pas bloquant (chacune est livrable seule), mais **attributs d'abord** rend
-la compétence d'armure (Phase 3) plus naturelle.
+Les deux features sont implémentées et se renforcent :
+- **Force** (FOR) : détermine `carryMax()` — permet de porter des armures lourdes
+  sans dépasser la charge max.
+- **Vitesse** (VIT) : `moveMult()` module la vitesse de déplacement.
+- **Endurance** (END) : augmente `maxHp()` — le joueur survivra mieux aux coups
+  même avec une AC élevée.
+
+La **compétence d'armure** (Phase 3) reste à implémenter et bénéficiera des synergies
+avec les attributs (AGI pour light, END pour heavy).
 
 ## Fichiers touchés (estimation)
 

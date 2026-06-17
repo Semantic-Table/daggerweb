@@ -11,27 +11,23 @@
 - [x] Combat épée + ennemis poursuiveurs + PV/mort (GDD §5, partiel)
 - [x] Inventaire, loot sur cadavres, équipement d'armes
 - [x] Compétences à l'usage par catégorie d'arme (GDD §6, proto)
+- [x] **Attributs & systèmes RPG** — 8 attributs (FOR/INT/VOL/AGI/END/CHA/VIT/CHN) avec
+  stats dérivées (PV max, mana, charge), progression par la pratique. Roadmap détaillée :
+  [`roadmap-attributs.md`](roadmap-attributs.md).
+- [x] **Équipement défensif** — armures/boucliers + Classe d'armure (AC = 10 + Σ armures) + mitigation.
+  Paper-doll fonctionnel, loot d'armures. Roadmap détaillée : [`roadmap-armures.md`](roadmap-armures.md).
 - [x] **Menu RPG « Grimoire »** : 6 écrans + 4 palettes (cf.
-  [`todo-ui-rpg.md`](todo-ui-rpg.md)) — sacoche/équipement/aptitudes branchés,
-  reste en placeholders.
+  [`todo-ui-rpg.md`](todo-ui-rpg.md)) — sacoche/équipement/aptitudes/attributs/armures branchés,
+  magie et carte restent en placeholders.
 
 ## Priorités proches
 
-- [ ] **Système de compétences à l'usage** (GDD §6) — XP par type d'arme
-  (lame/hache/mains nues), bonus par palier. Plan détaillé :
-  [`todo-competences.md`](todo-competences.md). ⬅ prochaine session.
 - [ ] **Modules de donjon à connecteurs** — remplacer la grille creusée par de vrais
   modules (couloir/angle/T/salle/dead-end) chaînés par points d'accroche orientés.
   C'est le cœur technique annoncé au GDD §4.
 - [ ] **Feel de combat** — son, recul caméra, i-frames, feedback de mort joueur.
-- [ ] **Attributs & systèmes RPG** — 8 attributs qui gouvernent aptitudes et stats
-  dérivées (PV/magie/charge). Fonde la profondeur RPG, rend réels les écrans
-  Personnage & Aptitudes. Roadmap détaillée : [`roadmap-attributs.md`](roadmap-attributs.md).
-- [ ] **Équipement défensif** — armures/boucliers + Classe d'armure + mitigation.
-  Active le paper-doll et valorise le loot. Roadmap détaillée :
-  [`roadmap-armures.md`](roadmap-armures.md). Se croise avec les attributs.
 - [ ] **Autres placeholders du Grimoire** (cf. [`todo-ui-rpg.md`](todo-ui-rpg.md)) :
-  or & économie, carte branchée sur l'overworld. La magie est un plus gros morceau
+  or & économie, carte branchée sur l'overworld, malus d'encombrement. La magie est un plus gros morceau
   (voir Plus tard).
 
 ## Plus tard
