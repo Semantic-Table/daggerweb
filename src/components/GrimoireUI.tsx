@@ -1038,8 +1038,9 @@ const MAP_SCALE = 100 / 200; // 200 = GROUND size, 100% = carte width
 // Convertit les coordonnées monde en position sur la carte (pourcentage)
 function worldToMapCoord(x: number, z: number): { mapX: number; mapY: number } {
   // Inverser Z car dans le monde, +z = nord, mais sur la carte, +y = sud
+  // Inverser X car la caméra est tournée de π (180°), donc +x monde = gauche joueur
   return {
-    mapX: 50 + x * MAP_SCALE,
+    mapX: 50 - x * MAP_SCALE,
     mapY: 50 - z * MAP_SCALE,
   };
 }

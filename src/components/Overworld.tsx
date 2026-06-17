@@ -72,23 +72,6 @@ export function Overworld({ data }: { data: OverworldData }) {
       {data.entrances.map((e) => (
         <Entrance key={e.id} data={e} />
       ))}
-
-      {/* ======================================================================== */}
-      {/* 🎯 ENNEMIS DE TEST - Pour tester rapidement les nouveaux ennemis */}
-      {/* ======================================================================== */}
-      
-      {/* Slime - un peu plus loin */}
-      <Slime spawn={[-3, -3]} index={1} />
-      
-      {/* Orc - près des rochers */}
-      {/* <Orc spawn={[8, 5]} index={2} />
-       */}
-      {/* Loup - en mouvement */}
-      <Wolf spawn={[-5, 4]} index={3} />
-      
-      {/* Un slime acide près de l'orc */}
-      <Slime spawn={[10, 7]} index={5} />
-
     </group>
   );
 }
