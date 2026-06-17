@@ -88,7 +88,7 @@ export const SKILL_SPEED_PER_LEVEL = 0.04; // -4% swingDur par palier (plus rapi
 export const SKILL_SPEED_FLOOR = 0.5; // swingDur ne descend pas sous 50% du base
 
 // Génération de donjon
-export const DUNGEON_SIZE = 24;
-export const DUNGEON_CELL_RATIO = 0.12; // proportion de cellules creusées
+export const CELL = 4; // taille d'une cellule de donjon (unités monde)
+export const DUNGEON_SIZE = 24; // dimension de la grille du donjon (cellules)
 export const DUNGEON_ENEMY_MIN_DIST = 12; // distance min au spawn pour les ennemis
 export const DUNGEON_MAX_ENEMIES = 4;
