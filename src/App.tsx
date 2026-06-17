@@ -254,7 +254,10 @@ export function App() {
         dpr={0.2}
         gl={{ antialias: false, powerPreference: "high-performance" }}
         camera={{ fov: 72, near: 0.1, far: 300 }}
-        onCreated={({ camera }) => camera.position.set(...spawn)}
+        onCreated={({ camera }) => {
+          camera.position.set(...spawn);
+          camera.rotation.y = Math.PI; // Regarde vers +z (Nord)
+        }}
       >
         <color attach="background" args={[mode === "dungeon" ? "#07070a" : "#141118"]} />
         <fog attach="fog" args={mode === "dungeon" ? ["#07070a", 4, 30] : ["#141118", 20, 120]} />

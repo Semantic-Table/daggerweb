@@ -44,6 +44,7 @@ import type { ItemDef, WeaponDef, ArmorDef, ArmorSlot } from "../items/itemDefs"
 import type { OverworldData, Entrance } from "../gen/overworldGen";
 import { type EntranceKind } from "../gen/overworldGen";
 import { generateDungeonName, generateDungeonShortName } from "../gen/dungeonNames";
+import { playerPos } from "../combat/playerState";
 import {
   THEME_ORDER,
   THEME_LABEL,
@@ -1031,9 +1032,6 @@ function Magic({ sel, onSelect }: { sel: string; onSelect: (id: string) => void 
 
 /* Carte — basée sur les données réelles de l'overworld */
 
-// Position du joueur dans l'overworld (coordonnées centrales)
-const PLAYER_OVERWORLD_POS = { x: 0, z: 0 };
-
 // Échelle pour convertir les coordonnées monde en pourcentages de carte
 const MAP_SCALE = 100 / 200; // 200 = GROUND size, 100% = carte width
 
@@ -1051,7 +1049,7 @@ function generateDungeonMarks(
   entrances: Entrance[],
   returnId: number | null,
   mode: "overworld" | "dungeon"
-): { name: string; x: number; y: number; here?: boolean; kind: EntranceKind; id: number }[] {
+): { name: string; x: number; y: number; here?: boolean; kind: EntranceKind; id: number; seed: number }[] {
   return entrances.map((e) => {
     const { mapX, mapY } = worldToMapCoord(e.x, e.z);
     const isCurrent = mode === "dungeon" && returnId === e.id;
@@ -1062,6 +1060,7 @@ function generateDungeonMarks(
       here: isCurrent,
       kind: e.kind,
       id: e.id,
+      seed: e.seed,
     };
   });
 }
@@ -1090,13 +1089,33 @@ function MapScreen({
   returnId: number | null;
 }) {
   const { entrances } = overworldData;
+  const [, forceUpdate] = useReducer((n: number) => n + 1, 0);
   
+  // Force un re-render à chaque frame pour mettre à jour la position du joueur
+  useEffect(() => {
+    let lastX = playerPos.x;
+    let lastZ = playerPos.z;
+    let frameId: number;
+    
+    const checkPosition = () => {
+      if (playerPos.x !== lastX || playerPos.z !== lastZ) {
+        lastX = playerPos.x;
+        lastZ = playerPos.z;
+        forceUpdate();
+      }
+      frameId = requestAnimationFrame(checkPosition);
+    };
+    
+    frameId = requestAnimationFrame(checkPosition);
+    return () => cancelAnimationFrame(frameId);
+  }, []);
+
   // Générer les marques de la carte à partir des vraies entrances
   const mapMarks = generateDungeonMarks(entrances, returnId, mode);
   const knownPlaces = generateKnownPlaces(entrances);
 
-  // Position du joueur sur la carte
-  const playerMapPos = worldToMapCoord(PLAYER_OVERWORLD_POS.x, PLAYER_OVERWORLD_POS.z);
+  // Position du joueur sur la carte (mise à jour en temps réel)
+  const playerMapPos = worldToMapCoord(playerPos.x, playerPos.z);
 
   return (
     <div className="grim-map">
@@ -1117,7 +1136,7 @@ function MapScreen({
                 top: `${m.y}%`,
                 background: m.here ? "var(--gold)" : "var(--inkDim)",
               }}
-              title={generateDungeonName(m.kind, entrances.find(e => e.id === m.id)?.seed || 0)}
+              title={generateDungeonName(m.kind, m.seed)}
             />
             <div className="grim-mark-label" style={{ left: `${m.x}%`, top: `calc(${m.y}% + 11px)` }}>
               {m.name}

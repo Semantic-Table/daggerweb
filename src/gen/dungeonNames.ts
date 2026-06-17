@@ -33,7 +33,7 @@ const CAVE_PREFIXES = [
 ];
 
 const CAVE_SUFFIXES = [
-  "du Dragon", "des Ténèbres", "desristaux", "du Vent", "des Échos",
+  "du Dragon", "des Ténèbres", "des Cristaux", "du Vent", "des Échos",
   "des Ombres", "du Tonnerre", "de la Pluie", "des Vers", "du Serpent",
   "du Loup", "de la Chauve-Souris", "des Champignons", "de la Pierre", "Profonde",
   "Sombre", "Humide", "Glacée", "Brumante", "Oubliée"
@@ -62,18 +62,18 @@ export function generateDungeonName(kind: EntranceKind, seed: number): string {
   
   switch (kind) {
     case "keep":
-      const keepPrefixIdx = (h % KEEP_PREFIXES.length + KEEP_PREFIXES.length) % KEEP_PREFIXES.length;
-      const keepSuffixIdx = ((h / 7) % KEEP_SUFFIXES.length + KEEP_SUFFIXES.length) % KEEP_SUFFIXES.length;
+      const keepPrefixIdx = h % KEEP_PREFIXES.length;
+      const keepSuffixIdx = Math.floor(h / 7) % KEEP_SUFFIXES.length;
       return `${KEEP_PREFIXES[keepPrefixIdx]} ${KEEP_SUFFIXES[keepSuffixIdx]}`;
     
     case "crypt":
-      const cryptPrefixIdx = (h % CRYPT_PREFIXES.length + CRYPT_PREFIXES.length) % CRYPT_PREFIXES.length;
-      const cryptSuffixIdx = ((h / 11) % CRYPT_SUFFIXES.length + CRYPT_SUFFIXES.length) % CRYPT_SUFFIXES.length;
+      const cryptPrefixIdx = h % CRYPT_PREFIXES.length;
+      const cryptSuffixIdx = Math.floor(h / 11) % CRYPT_SUFFIXES.length;
       return `${CRYPT_PREFIXES[cryptPrefixIdx]} ${CRYPT_SUFFIXES[cryptSuffixIdx]}`;
     
     case "cave":
-      const cavePrefixIdx = (h % CAVE_PREFIXES.length + CAVE_PREFIXES.length) % CAVE_PREFIXES.length;
-      const caveSuffixIdx = ((h / 13) % CAVE_SUFFIXES.length + CAVE_SUFFIXES.length) % CAVE_SUFFIXES.length;
+      const cavePrefixIdx = h % CAVE_PREFIXES.length;
+      const caveSuffixIdx = Math.floor(h / 13) % CAVE_SUFFIXES.length;
       return `${CAVE_PREFIXES[cavePrefixIdx]} ${CAVE_SUFFIXES[caveSuffixIdx]}`;
     
     default:
@@ -116,6 +116,6 @@ export function generateDungeonDescription(kind: EntranceKind, seed: number): st
   };
 
   const h = Math.abs(seed);
-  const descs = descriptions[kind] || descriptions.keep;
-  return descs[(h % descs.length + descs.length) % descs.length];
+  const descs = descriptions[kind] ?? descriptions.keep;
+  return descs[h % descs.length];
 }
