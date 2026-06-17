@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { KeyboardControls, PointerLockControls, Stats } from "@react-three/drei";
 import { Physics } from "@react-three/rapier";
-import { generateOverworld, type Entrance, type EntranceKind } from "./gen/overworldGen";
+import { generateOverworld, type Entrance } from "./gen/overworldGen";
 import { generateDungeon } from "./gen/dungeonGen";
 import { generateDungeonName } from "./gen/dungeonNames";
 import { Overworld } from "./components/Overworld";
@@ -38,7 +38,6 @@ const KEYMAP = [
 export function App() {
   const [mode, setMode] = useState<"overworld" | "dungeon">("overworld");
   const [dungeonSeed, setDungeonSeed] = useState<number | null>(null);
-  const [entranceKind, setEntranceKind] = useState<EntranceKind>("keep");
   const [returnId, setReturnId] = useState<number | null>(null);
   const [label, setLabel] = useState<string | null>(null);
   const [dungeonName, setDungeonName] = useState<string | null>(null);
@@ -195,7 +194,6 @@ export function App() {
   const onEnter = useCallback((e: Entrance) => {
     setDungeonSeed(e.seed);
     setReturnId(e.id);
-    setEntranceKind(e.kind);
     setDungeonName(generateDungeonName(e.kind, e.seed));
     setMode("dungeon");
     setLabel(null);
@@ -277,7 +275,7 @@ export function App() {
         <Physics gravity={[0, -22, 0]} paused={invOpen}>
           {mode === "dungeon" && dungeon ? (
             <>
-              <Dungeon data={dungeon} theme={entranceKind} />
+              <Dungeon data={dungeon} />
               <ExitPortal pos={dungeon.exit} rot={dungeon.exitRot} />
               <Enemies key={`enemies-${dungeonSeed}`} spawns={dungeon.enemies} />
             </>

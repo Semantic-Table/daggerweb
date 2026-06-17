@@ -30,7 +30,7 @@ const ACCENT_COLOR = new THREE.Color(skeletonType.appearance.accentColor as stri
 const EYE_COLOR = new THREE.Color(skeletonType.appearance.eyeColor as string);
 
 // Export pour permettre l'import dans d'autres fichiers
-const skeletonEnemyType = ENEMY_TYPES.skeleton;
+export const skeletonEnemyType = ENEMY_TYPES.skeleton;
 
 export function Skeleton({ spawn, index }: { spawn: [number, number]; index: number }) {
   const body = useRef<RapierRigidBody>(null);
@@ -397,5 +397,3 @@ export function Skeleton({ spawn, index }: { spawn: [number, number]; index: num
   );
 }
 
-// Export du type pour référence
-export { skeletonType as skeletonEnemyType };

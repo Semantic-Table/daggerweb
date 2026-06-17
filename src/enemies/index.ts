@@ -5,16 +5,17 @@
 // Types et configurations
 export * from "./enemyTypes";
 
-// Composants d'ennemis
-export { Skeleton, skeletonEnemyType } from "./Skeleton";
-export { Slime, slimeEnemyType } from "./Slime";
-export { Orc, orcEnemyType } from "./Orc";
-export { Wolf, wolfEnemyType } from "./Wolf";
-
 // Ré-export du gobelin existant pour uniformité
 import { Enemy as Goblin } from "../components/Enemy";
 export { Goblin };
-export { ENEMY_TYPES } from "./enemyTypes";
+
+// Composants d'ennemis et leurs types
+import { Skeleton, skeletonEnemyType } from "./Skeleton";
+import { Slime, slimeEnemyType } from "./Slime";
+import { Orc, orcEnemyType } from "./Orc";
+import { Wolf, wolfEnemyType } from "./Wolf";
+
+export { Skeleton, skeletonEnemyType, Slime, slimeEnemyType, Orc, orcEnemyType, Wolf, wolfEnemyType };
 
 // =============================================================================
 // UTILITAIRES - Sélection et génération d'ennemis

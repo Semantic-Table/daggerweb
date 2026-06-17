@@ -39,7 +39,7 @@ export function Orc({ spawn, index }: { spawn: [number, number]; index: number }
   const leftLegRef = useRef<THREE.Mesh>(null);
   const rightLegRef = useRef<THREE.Mesh>(null);
   const headRef = useRef<THREE.Mesh>(null);
-  const axeRef = useRef<THREE.Mesh>(null);
+  const axeRef = useRef<THREE.Group>(null);
   
   const hp = useRef(ORC_HP);
   const dead = useRef(false);

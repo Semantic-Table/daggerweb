@@ -2,7 +2,6 @@ import { Instance, Instances } from "@react-three/drei";
 import { BallCollider, CuboidCollider, CylinderCollider, RigidBody } from "@react-three/rapier";
 import { GROUND, type OverworldData } from "../gen/overworldGen";
 import { Entrance } from "./Entrance";
-import { Skeleton, Slime, Orc, Wolf } from "../enemies";
 
 // Rendu de l'overworld (cf. GDD §3). Décor instancié (peu de draw calls) +
 // colliders Rapier regroupés dans un seul RigidBody statique.

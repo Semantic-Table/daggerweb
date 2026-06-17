@@ -1,49 +1,110 @@
 import { Instance, Instances } from "@react-three/drei";
 import { CuboidCollider, RigidBody } from "@react-three/rapier";
-import { CELL, WALL_H, type DungeonData } from "../gen/dungeonGen";
-import type { EntranceKind } from "../gen/overworldGen";
+import { CELL, WALL_H, type DungeonData, type FloorCell, type WallPanel, type CeilingCell } from "../gen/dungeonGen";
+import { 
+  getWallAppearance, 
+  getFloorAppearance, 
+  getCeilingAppearance,
+  type WallBlockType,
+  type FloorBlockType,
+  type CeilingBlockType
+} from "../gen/blockTypes";
 
-// Palette visuelle selon le type d'entrée (keep = forteresse, crypt = tombeau froid, cave = roche brute).
-const THEMES: Record<EntranceKind, { floor: string; ceiling: string; wall: string }> = {
-  keep:  { floor: "#4f4538", ceiling: "#29251f", wall: "#5c523f" },
-  crypt: { floor: "#353540", ceiling: "#1c1c26", wall: "#484858" },
-  cave:  { floor: "#3d3c2a", ceiling: "#1e1d14", wall: "#4e4c36" },
-};
-
-// Rendu du donjon : sol/plafond/murs en INSTANCES (visuel léger), et colliders
-// Rapier explicites (un cuboïde orienté par panneau + un sol plat).
-export function Dungeon({ data, theme }: { data: DungeonData; theme: EntranceKind }) {
+// Rendu du donjon : sol/plafond/murs en INSTANCES groupées par type (visuel léger),
+// et colliders Rapier explicites (un cuboïde orienté par panneau + un sol plat).
+export function Dungeon({ data }: { data: DungeonData }) {
   const half = (data.size * CELL) / 2;
-  const colors = THEMES[theme];
+  
+  // Grouper les sols, plafonds et murs par type de bloc pour optimiser les instances
+  const floorsByType = new Map<FloorBlockType, FloorCell[]>();
+  const ceilingsByType = new Map<CeilingBlockType, CeilingCell[]>();
+  const wallsByType = new Map<WallBlockType, WallPanel[]>();
+  
+  data.floors.forEach((cell) => {
+    const key = cell.blockType as FloorBlockType;
+    if (!floorsByType.has(key)) {
+      floorsByType.set(key, []);
+    }
+    floorsByType.get(key)!.push(cell);
+  });
+  
+  data.ceilings.forEach((cell) => {
+    const key = cell.blockType as CeilingBlockType;
+    if (!ceilingsByType.has(key)) {
+      ceilingsByType.set(key, []);
+    }
+    ceilingsByType.get(key)!.push(cell);
+  });
+  
+  data.panels.forEach((panel) => {
+    const key = panel.blockType as WallBlockType;
+    if (!wallsByType.has(key)) {
+      wallsByType.set(key, []);
+    }
+    wallsByType.get(key)!.push(panel);
+  });
 
   return (
     <group>
-      {/* Sol (instancié). */}
-      <Instances limit={data.floors.length}>
-        <planeGeometry args={[CELL, CELL]} />
-        <meshStandardMaterial color={colors.floor} roughness={1} />
-        {data.floors.map(([x, z], i) => (
-          <Instance key={i} position={[x, 0, z]} rotation={[-Math.PI / 2, 0, 0]} />
-        ))}
-      </Instances>
+      {/* Sol (instancié par type de bloc). */}
+      {Array.from(floorsByType.entries()).map(([type, cells]) => (
+        <Instances key={`floor-${type}-${data.seed}`} limit={cells.length}>
+          <planeGeometry args={[CELL, CELL]} />
+          <meshStandardMaterial 
+            color={getFloorAppearance(type).color} 
+            roughness={getFloorAppearance(type).roughness}
+            metalness={getFloorAppearance(type).metalness || 0}
+          />
+          {cells.map((cell, i) => (
+            <Instance 
+              key={i} 
+              position={[cell.x, 0, cell.z]} 
+              rotation={[-Math.PI / 2, 0, 0]} 
+            />
+          ))}
+        </Instances>
+      ))}
 
-      {/* Plafond (instancié). */}
-      <Instances limit={data.floors.length}>
-        <planeGeometry args={[CELL, CELL]} />
-        <meshStandardMaterial color={colors.ceiling} roughness={1} />
-        {data.floors.map(([x, z], i) => (
-          <Instance key={i} position={[x, WALL_H, z]} rotation={[Math.PI / 2, 0, 0]} />
-        ))}
-      </Instances>
+      {/* Plafond (instancié par type de bloc). */}
+      {Array.from(ceilingsByType.entries()).map(([type, cells]) => {
+        if (type === "none") return null; // Ne pas rendre les plafonds "none"
+        return (
+          <Instances key={`ceiling-${type}-${data.seed}`} limit={cells.length}>
+            <planeGeometry args={[CELL, CELL]} />
+            <meshStandardMaterial 
+              color={getCeilingAppearance(type).color} 
+              roughness={getCeilingAppearance(type).roughness}
+              metalness={getCeilingAppearance(type).metalness || 0}
+            />
+            {cells.map((cell, i) => (
+              <Instance 
+                key={i} 
+                position={[cell.x, WALL_H, cell.z]} 
+                rotation={[Math.PI / 2, 0, 0]} 
+              />
+            ))}
+          </Instances>
+        );
+      })}
 
-      {/* Murs (instanciés). */}
-      <Instances limit={data.panels.length}>
-        <boxGeometry args={[CELL, WALL_H, 0.4]} />
-        <meshStandardMaterial color={colors.wall} roughness={1} />
-        {data.panels.map((p, i) => (
-          <Instance key={i} position={[p.x, WALL_H / 2, p.z]} rotation={[0, p.rot, 0]} />
-        ))}
-      </Instances>
+      {/* Murs (instanciés par type de bloc). */}
+      {Array.from(wallsByType.entries()).map(([type, panels]) => (
+        <Instances key={`wall-${type}-${data.seed}`} limit={panels.length}>
+          <boxGeometry args={[CELL, WALL_H, 0.4]} />
+          <meshStandardMaterial 
+            color={getWallAppearance(type).color} 
+            roughness={getWallAppearance(type).roughness}
+            metalness={getWallAppearance(type).metalness || 0}
+          />
+          {panels.map((p, i) => (
+            <Instance 
+              key={i} 
+              position={[p.x, WALL_H / 2, p.z]} 
+              rotation={[0, p.rot, 0]} 
+            />
+          ))}
+        </Instances>
+      ))}
 
       {/* Physique : un cuboïde par panneau + le sol. */}
       <RigidBody type="fixed" colliders={false}>
