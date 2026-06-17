@@ -7,13 +7,13 @@
 
 ## 🎯 Priorités proches
 
-### 1. Modules de donjon à connecteurs (GDD §4)
+### 1. Modules de donjon à connecteurs (GDD §4) ✅
 Remplacer la grille creusée actuelle par un système modulaire :
-- Bibliothèque de modules 3D (couloir/angle/T/salle/dead-end)
-- Chaînage par points d'accroche orientés
-- Seed déterministe pour la sauvegarde
+- [x] Bibliothèque de modules 3D (couloir/angle/T/salle/dead-end)
+- [x] Chaînage par points d'accroche orientés
+- [x] Seed déterministe pour la sauvegarde
 
-**Bloc technique central** — à faire avant les thématiques de donjon.
+**Bloc technique central** — Implémenté dans `src/gen/dungeonModules.ts` et `src/gen/dungeonGen.ts`.
 
 ---
 

@@ -22,9 +22,9 @@
 
 ## Priorités proches
 
-- [ ] **Modules de donjon à connecteurs** — remplacer la grille creusée par de vrais
+- [x] **Modules de donjon à connecteurs** — remplacer la grille creusée par de vrais
   modules (couloir/angle/T/salle/dead-end) chaînés par points d'accroche orientés.
-  C'est le cœur technique annoncé au GDD §4.
+  C'est le cœur technique annoncé au GDD §4. Implémenté dans `src/gen/dungeonModules.ts`.
 - [ ] **Feel de combat** — son, recul caméra, i-frames, feedback de mort joueur.
 - [ ] **Autres placeholders du Grimoire** (cf. [`todo-ui-rpg.md`](todo-ui-rpg.md)) :
   or & économie, carte branchée sur l'overworld, malus d'encombrement. La magie est un plus gros morceau
