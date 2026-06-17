@@ -42,17 +42,19 @@ export function Interaction({
     if (ud?.entrance) next = { kind: "enter", entrance: ud.entrance as Entrance };
     else if (ud?.exit) next = { kind: "exit" };
 
-    // Cadavres — on raycaste les meshes enregistrés.
+    // Cadavres — on raycaste les meshes enregistrés. On construit une seule
+    // table mesh→handle par frame (au lieu de re-spreader le registre à chaque
+    // niveau de parent remonté).
     if (!next) {
       ray.far = INTERACT_CORPSE_FAR;
-      const corpseMeshes = [...corpseRegistry].map((h) => h.mesh);
-      const corpseHits = ray.intersectObjects(corpseMeshes, true);
+      const byMesh = new Map<THREE.Object3D, CorpseHandle>();
+      for (const h of corpseRegistry) byMesh.set(h.mesh, h);
+      const corpseHits = ray.intersectObjects([...byMesh.keys()], true);
       if (corpseHits.length > 0) {
-        const hit = corpseHits[0].object;
         // Remonter jusqu'à un groupe enregistré.
-        let obj: THREE.Object3D | null = hit;
+        let obj: THREE.Object3D | null = corpseHits[0].object;
         while (obj) {
-          const handle = [...corpseRegistry].find((h) => h.mesh === obj);
+          const handle = byMesh.get(obj);
           if (handle) { next = { kind: "corpse", handle }; break; }
           obj = obj.parent;
         }
@@ -62,7 +64,7 @@ export function Interaction({
     target.current = next;
     const label =
       next?.kind === "enter"
-        ? ENTRANCE_CONFIG[next.entrance.kind].label
+        ? `${ENTRANCE_CONFIG[next.entrance.kind].label} — niv. ${next.entrance.level}`
         : next?.kind === "exit"
           ? "[E] Remonter à la surface"
           : next?.kind === "corpse"

@@ -43,6 +43,7 @@ export interface DungeonData {
   exitRot: number; // orientation du seuil (Y)
   size: number; // dimension de la grille (en cellules)
   seed: number;
+  level: number; // niveau de difficulté, hérité de l'entrée (cf. roadmap-niveaux)
   // Types de blocs pour ce donjon (un seul par catégorie)
   wallType: WallBlockType;
   floorType: FloorBlockType;
@@ -128,7 +129,7 @@ function carveCorridor(g: Grid, ax: number, ay: number, bx: number, by: number, 
 // GÉNÉRATION
 // ============================================================================
 
-export function generateDungeon(seed: number): DungeonData {
+export function generateDungeon(seed: number, level: number = 1): DungeonData {
   const rng = makeRng(seed);
 
   // Un type de bloc par catégorie pour ce donjon (déterministe)
@@ -249,6 +250,7 @@ export function generateDungeon(seed: number): DungeonData {
     exitRot,
     size,
     seed,
+    level,
     wallType,
     floorType,
     ceilingType,

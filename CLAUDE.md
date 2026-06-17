@@ -39,8 +39,10 @@ src/
     itemDefs.ts         Définitions d'objets (armes, armures, consommables) + stats
   enemies/            CATALOGUE & COMPOSANTS D'ENNEMIS (au-delà du gobelin de base)
     enemyTypes.ts       Catalogue de 9 types (stats/apparence/comportement)
+    useEnemyAI.ts       Hook moteur IA/combat PARTAGÉ (registre, poursuite, attaque,
+                        mort, loot, pause) — paramétré par nombres bruts + callbacks
     index.ts            Exports + sélection de composant/biome (helpers)
-    Skeleton/Slime/Orc/Wolf.tsx   Composants d'ennemis (procéduraux)
+    Skeleton/Slime/Orc/Wolf.tsx   Composants d'ennemis (meshes + anims via useEnemyAI)
   components/         RENDU (R3F)
     Player.tsx          Capsule dynamique Rapier + caméra + entrées clavier
     Torch.tsx           Torche qui suit la caméra (donjons)
@@ -49,7 +51,7 @@ src/
     Entrance.tsx        Donjon / crypte / grotte (colliders auto "hull")
     Interaction.tsx     Interaction au regard (raycast seuil/cadavre + touche E)
     Sword.tsx           Viewmodel épée (enfant caméra) + swing + hit
-    Enemy.tsx           Poursuiveur (gobelin) : poursuite, hit, mort ragdoll, attaque
+    Enemy.tsx           Poursuiveur (gobelin) : meshes + anims via useEnemyAI
     Enemies.tsx         Instancie les ennemis d'un donjon
     ExitPortal.tsx      Seuil de retour vers l'overworld dans un donjon
     GrimoireUI.tsx      Menu RPG plein écran (6 écrans + 4 palettes) — voir docs/todo-ui-rpg.md
@@ -82,14 +84,15 @@ src/
 
 ## État actuel
 
-Overworld + 3 types d'entrées, donjons procéduraux (noms + variété de blocs par
-donjon), déplacement FPS physique, épée corps-à-corps, ennemis poursuiveurs, PV joueur
-+ mort/respawn, attributs & armures (AC), HUD minimal, menu RPG « Grimoire » (touche I)
-inspiré de Daggerfall. Beaucoup d'écrans du menu sont des **placeholders** en attendant
-les mécaniques (or, magie, carte) — état détaillé dans
+Overworld + 3 types d'entrées, donjons procéduraux (noms + variété de blocs +
+**niveau** par donjon), déplacement FPS physique, épée corps-à-corps, ennemis
+poursuiveurs, PV joueur + mort/respawn, attributs & armures (AC), HUD minimal, menu
+RPG « Grimoire » (touche I) inspiré de Daggerfall. Beaucoup d'écrans du menu sont des
+**placeholders** en attendant les mécaniques (or, magie) — état détaillé dans
 [`docs/todo-ui-rpg.md`](docs/todo-ui-rpg.md).
 
-Le module `enemies/` fournit un **catalogue** de 9 types et des composants Skeleton /
-Slime / Orc / Wolf ; en jeu, `Enemies.tsx` instancie pour l'instant le gobelin de base
-(`Enemy.tsx`) — le câblage des autres types est en chantier. Suite possible :
-[`docs/roadmap.md`](docs/roadmap.md).
+Le module `enemies/` fournit un **catalogue** de 9 types ; les 5 composants existants
+(gobelin + Skeleton/Slime/Orc/Wolf) partagent le moteur `useEnemyAI`. En jeu,
+`Enemies.tsx` instancie pour l'instant le gobelin de base — le câblage des autres types
+et le **scaling par niveau** sont planifiés dans [`docs/roadmap-niveaux.md`](docs/roadmap-niveaux.md)
+(Phase 1 = niveau de donjon, faite). Autres pistes : [`docs/roadmap.md`](docs/roadmap.md).

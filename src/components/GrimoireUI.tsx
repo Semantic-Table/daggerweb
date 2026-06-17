@@ -1050,7 +1050,7 @@ function generateDungeonMarks(
   entrances: Entrance[],
   returnId: number | null,
   mode: "overworld" | "dungeon"
-): { name: string; x: number; y: number; here?: boolean; kind: EntranceKind; id: number; seed: number }[] {
+): { name: string; x: number; y: number; here?: boolean; kind: EntranceKind; id: number; seed: number; level: number }[] {
   return entrances.map((e) => {
     const { mapX, mapY } = worldToMapCoord(e.x, e.z);
     const isCurrent = mode === "dungeon" && returnId === e.id;
@@ -1062,6 +1062,7 @@ function generateDungeonMarks(
       kind: e.kind,
       id: e.id,
       seed: e.seed,
+      level: e.level,
     };
   });
 }
@@ -1069,12 +1070,13 @@ function generateDungeonMarks(
 // Génère la liste des lieux connus (entrances de donjons)
 function generateKnownPlaces(
   entrances: Entrance[]
-): { name: string; kind: EntranceKind; visited: boolean; id: number }[] {
+): { name: string; kind: EntranceKind; visited: boolean; id: number; level: number }[] {
   return entrances.map((e) => ({
     name: generateDungeonShortName(e.kind, e.seed),
     kind: e.kind,
     visited: true, // Pour l'instant, tous sont "visités" une fois découverts
     id: e.id,
+    level: e.level,
   }));
 }
 
@@ -1137,10 +1139,10 @@ function MapScreen({
                 top: `${m.y}%`,
                 background: m.here ? "var(--gold)" : "var(--inkDim)",
               }}
-              title={generateDungeonName(m.kind, m.seed)}
+              title={`${generateDungeonName(m.kind, m.seed)} — niv. ${m.level}`}
             />
             <div className="grim-mark-label" style={{ left: `${m.x}%`, top: `calc(${m.y}% + 11px)` }}>
-              {m.name}
+              {m.name} <span className="grim-dim">niv. {m.level}</span>
             </div>
           </div>
         ))}
@@ -1187,7 +1189,7 @@ function MapScreen({
                 }}
               />
               <span className="grim-ink grim-place-name">{p.name}</span>
-              <span className="grim-dim">{p.visited ? "exploré" : "?"}</span>
+              <span className="grim-dim">niv. {p.level} · {p.visited ? "exploré" : "?"}</span>
             </div>
           ))
         ) : (

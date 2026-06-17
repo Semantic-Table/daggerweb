@@ -38,6 +38,7 @@ const KEYMAP = [
 export function App() {
   const [mode, setMode] = useState<"overworld" | "dungeon">("overworld");
   const [dungeonSeed, setDungeonSeed] = useState<number | null>(null);
+  const [dungeonLevel, setDungeonLevel] = useState(1);
   const [returnId, setReturnId] = useState<number | null>(null);
   const [label, setLabel] = useState<string | null>(null);
   const [dungeonName, setDungeonName] = useState<string | null>(null);
@@ -60,10 +61,11 @@ export function App() {
   const invincibleUntil = useRef(0);
   
   // ==========================================================================
-  // INIT : Ajouter des armures de test pour roadmap-armures.md
+  // INIT (DEV uniquement) : armures de test pour roadmap-armures.md.
+  // Garde `import.meta.env.DEV` pour qu'une build de prod ne les distribue pas.
   // ==========================================================================
   useEffect(() => {
-    // Ajouter quelques armures pour tester le système
+    if (!import.meta.env.DEV) return;
     const starterArmor = [
       ITEMS.leather_cap,
       ITEMS.leather_vest,
@@ -180,8 +182,8 @@ export function App() {
 
   const overworld = useMemo(() => generateOverworld(OVERWORLD_SEED), []);
   const dungeon = useMemo(
-    () => (dungeonSeed != null ? generateDungeon(dungeonSeed) : null),
-    [dungeonSeed]
+    () => (dungeonSeed != null ? generateDungeon(dungeonSeed, dungeonLevel) : null),
+    [dungeonSeed, dungeonLevel]
   );
 
   // Position d'apparition selon le monde courant.
@@ -193,8 +195,9 @@ export function App() {
 
   const onEnter = useCallback((e: Entrance) => {
     setDungeonSeed(e.seed);
+    setDungeonLevel(e.level);
     setReturnId(e.id);
-    setDungeonName(generateDungeonName(e.kind, e.seed));
+    setDungeonName(`${generateDungeonName(e.kind, e.seed)} — niv. ${e.level}`);
     setMode("dungeon");
     setLabel(null);
   }, []);

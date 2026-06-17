@@ -93,5 +93,6 @@ Améliorations sensorielles et feedback :
 ## 📌 Références
 - Détail technique : [`roadmap-attributs.md`](roadmap-attributs.md) ✅ fait
 - Détail technique : [`roadmap-armures.md`](roadmap-armures.md) ✅ fait
+- Détail technique : [`roadmap-niveaux.md`](roadmap-niveaux.md) 🔜 niveaux de donjon & d'ennemi (scaling)
 - État UI : [`todo-ui-rpg.md`](todo-ui-rpg.md)
 - Vision globale : [`GDD.md`](../GDD.md)

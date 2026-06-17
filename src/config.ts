@@ -1,7 +1,7 @@
 // Constantes de gameplay centralisées. Modifier ici pour tuner sans chercher dans les composants.
 
 // Joueur
-export const PLAYER_MAX_HP = 100;
+// (Les PV max ne sont plus une constante : ils dérivent de l'END via maxHp() — cf. character.ts)
 export const PLAYER_WALK = 4.2;
 export const PLAYER_RUN = 7.5;
 export const PLAYER_EYE = 0.6;
@@ -44,10 +44,6 @@ export const STAMINA_REGEN = 0.05;      // Régénération par seconde (fraction
 export const RUN_STAMINA_COST = 0.1;   // Coût par seconde en courant (fraction de maxStamina)
 export const ATTACK_STAMINA_COST = 0.08; // Coût par attaque (fraction de maxStamina)
 
-// Note: INV_MAX_WEIGHT est remplacé par carryMax() dans character.ts
-// Gardé pour compatibilité temporaire si besoin
-export const INV_MAX_WEIGHT = 80;
-
 // Ennemis
 export const ENEMY_SPEED = 1.8;
 export const ENEMY_STOP_DIST = 1.3;
@@ -65,11 +61,7 @@ export const BASE_AC = 10;
 
 // Mitigation : réduction plate des dégâts
 // dégâts_subis = max(1, dégâts_entrants - (AC - BASE_AC))
-
-// Équilibrage : AC typique pour tester
-// - Cuir léger : AC 10-13 (1-3 points)
-// - Mailles/Plates : AC 14-20 (4-10 points)
-export const ARMOR_TEST_TARGET_AC = 15;
+// Repères d'AC : cuir léger 10-13 (1-3 pts), mailles/plates 14-20 (4-10 pts).
 
 // Épée
 export const SWORD_REACH = 2.6;
@@ -92,3 +84,11 @@ export const CELL = 4; // taille d'une cellule de donjon (unités monde)
 export const DUNGEON_SIZE = 24; // dimension de la grille du donjon (cellules)
 export const DUNGEON_ENEMY_MIN_DIST = 12; // distance min au spawn pour les ennemis
 export const DUNGEON_MAX_ENEMIES = 4;
+
+// ==========================================================================
+// Niveaux (cf. docs/roadmap-niveaux.md)
+// ==========================================================================
+// Phase 1 : niveau de donjon, dérivé de la distance au spawn dans l'overworld.
+// Les constantes de croissance des stats (HP_GROWTH, DMG_GROWTH…) arrivent en Phase 2.
+export const LEVEL_MAX = 20;          // niveau maximum (donjon & ennemi)
+export const LEVEL_DIST_STEP = 40;    // unités monde par palier de difficulté

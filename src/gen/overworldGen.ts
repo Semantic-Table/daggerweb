@@ -1,4 +1,5 @@
-import { makeRng, type Rng } from "../rng";
+import { makeRng, randInt, type Rng } from "../rng";
+import { LEVEL_MAX, LEVEL_DIST_STEP } from "../config";
 
 // Overworld minimal (cf. GDD §3) en DONNÉES PURES : décor épars + entrées de
 // donjon de différents types. Le rendu/physique est délégué aux composants R3F.
@@ -25,6 +26,7 @@ export interface Entrance {
   rotY: number;
   seed: number;
   approach: [number, number, number]; // point de réapparition devant le seuil
+  level: number; // niveau de difficulté (≥ 1), croît avec l'éloignement du spawn
 }
 
 export interface OverworldData {
@@ -64,6 +66,12 @@ export function generateOverworld(seed: number): OverworldData {
     // le seuil ; on y place le point de réapparition, quelques mètres devant.
     const fx = Math.sin(rotY);
     const fz = Math.cos(rotY);
+    // Niveau : base donnée par la distance au spawn (origine), ± un écart seedé.
+    // Le gradient géographique restera léger tant que les entrées sont sur un
+    // cercle, mais la formule tient quand l'overworld s'étalera (cf. roadmap-niveaux).
+    const dist = Math.hypot(x, z);
+    const base = 1 + Math.floor(dist / LEVEL_DIST_STEP);
+    const level = Math.max(1, Math.min(LEVEL_MAX, base + randInt(rng, 0, 2)));
     entrances.push({
       id: i,
       kind: KINDS[i % KINDS.length],
@@ -72,6 +80,7 @@ export function generateOverworld(seed: number): OverworldData {
       rotY,
       seed: seed * 31 + i + 1,
       approach: [x + fx * 6, 1.6, z + fz * 6],
+      level,
     });
   }
 
