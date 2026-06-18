@@ -240,22 +240,25 @@ calculée par `characterLevel()`), à confronter au niveau de donjon.
   → *Le monde a un gradient lisible, même si les ennemis ne scalent pas encore.*
   → *Constantes `LEVEL_MAX` / `LEVEL_DIST_STEP` dans `config.ts`.*
 
-### Phase 2 — Scaling de stats + câblage des types (le gros morceau)
-- [ ] `enemies/scaling.ts` : `scaledStats(type, level)` + constantes `config.ts`.
-- [ ] `EnemySpawn { x, z, typeId, level }` ; `dungeonGen` choisit type + niveau (seedé).
-- [ ] `EnemyProps` avec `level` ; les 5 composants calculent `scaledStats` et nourrissent `useEnemyAI`.
-- [ ] `Enemies.tsx` instancie via `getEnemyComponent(typeId)`.
-- [ ] **Rebaser les PV** (`HP_SCALE`) et vérifier en jeu contre les dégâts d'épée réels.
+### Phase 2 — Scaling de stats + câblage des types (le gros morceau) ✅
+- [x] `enemies/scaling.ts` : `scaledStats(type, level)` + constantes `config.ts` (HP_GROWTH/DMG_GROWTH/ARMOR_GROWTH).
+- [x] `EnemySpawn { x, z, typeId, level, elite }` ; `dungeonGen` choisit type (pool débloqué par niveau) + niveau (distribution 60/30/10), seedé.
+- [x] `EnemyProps` (`level`, `elite`) ; les 5 composants calculent `scaledStats` et nourrissent `useEnemyAI`.
+- [x] `Enemies.tsx` instancie via `getEnemyComponent(typeId)`.
+- [x] **PV rebasés** : catalogue réécrit à l'échelle proto (pas de `HP_SCALE`) ; le gobelin a rejoint le catalogue (ex-`ENEMY_*` supprimées de `config.ts`).
+- [x] Bonus : **label flottant nom + niveau** au-dessus de la tête (`EnemyLabel`, billboard `<Text>` drei ; cf. Phase 4).
 
-  → *Les 4 ennemis du catalogue apparaissent enfin, à la bonne difficulté.*
+  → *Les 4 ennemis du catalogue apparaissent enfin, scalés au niveau du donjon.*
+  → ⚠️ **À vérifier en jeu** : équilibrage ressenti (PV vs dégâts d'épée) et lisibilité du label au `dpr` bas.
 
 ### Phase 3 — Composition par niveau
 - [ ] Mix de types par palier × biome (étendre `biomeEnemies` / `getEnemyForBiome`).
 - [ ] `DUNGEON_MAX_ENEMIES` fonction du niveau.
 
 ### Phase 4 — Feedback & loot
-- [ ] Niveau affiché dans le Grimoire / la carte.
-- [ ] Indice visuel d'ennemi de haut niveau / élite (optionnel, discret).
+- [x] Niveau affiché dans le Grimoire / la carte (fait en Phase 1).
+- [x] Label flottant nom + niveau au-dessus de l'ennemi (`EnemyLabel`), élite distinguée (or + préfixe « Élite »).
+- [ ] Indice visuel d'élite plus marqué (taille / aura) — optionnel.
 - [ ] `lootTier` modulé par `enemyLevel`, branché sur `rollLoot`.
 
 ### Phase 5 — Équilibrage de la boucle

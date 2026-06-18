@@ -4,18 +4,17 @@ import { CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/r
 import * as THREE from "three";
 import { playerPos } from "../combat/playerState";
 import { damagePlayer } from "../combat/playerCombat";
-import { useEnemyAI } from "./useEnemyAI";
+import { useEnemyAI, type EnemyProps } from "./useEnemyAI";
+import { EnemyLabel } from "./EnemyLabel";
+import { scaledStats } from "./scaling";
 import { ENEMY_TYPES } from "./enemyTypes";
 
 // Configuration spécifique au Slime
 const slimeType = ENEMY_TYPES.slime;
 
-const SLIME_SPEED = slimeType.stats.speed;
+// Stats de combat → scaledStats(type, level). On garde le fixe (collider, masse) +
+// la distance d'arrêt (utilisée dans l'animation de rebond), indépendants du niveau.
 const SLIME_STOP_DIST = slimeType.stats.stopDistance;
-const SLIME_HP = slimeType.stats.hp;
-const SLIME_ATTACK_DIST = slimeType.stats.attackRange;
-const SLIME_ATTACK_CD = slimeType.stats.attackCooldown;
-const SLIME_ATTACK_DMG = slimeType.stats.attackDamage;
 const SLIME_MASS = slimeType.stats.mass;
 const SLIME_COLLIDER_RADIUS = slimeType.stats.colliderRadius;
 const SLIME_COLLIDER_HEIGHT = slimeType.stats.colliderHeight;
@@ -26,14 +25,16 @@ const SECONDARY_COLOR = new THREE.Color(slimeType.appearance.secondaryColor as s
 const ACCENT_COLOR = new THREE.Color(slimeType.appearance.accentColor as string);
 
 // Composant Projectile pour l'acide
-function AcidProjectile({ 
-  position, 
-  direction, 
-  onHit 
-}: { 
-  position: THREE.Vector3; 
-  direction: THREE.Vector3; 
-  onHit: () => void 
+function AcidProjectile({
+  position,
+  direction,
+  dmg,
+  onHit
+}: {
+  position: THREE.Vector3;
+  direction: THREE.Vector3;
+  dmg: number;
+  onHit: () => void
 }) {
   const projectileRef = useRef<THREE.Mesh>(null);
   const [alive, setAlive] = useState(true);
@@ -60,7 +61,7 @@ function AcidProjectile({
     ).length();
     
     if (distToPlayer < 0.5) {
-      damagePlayer(SLIME_ATTACK_DMG);
+      damagePlayer(dmg);
       onHit();
       setAlive(false);
     }
@@ -83,7 +84,7 @@ function AcidProjectile({
   );
 }
 
-export function Slime({ spawn, index }: { spawn: [number, number]; index: number }) {
+export function Slime({ spawn, index, level, elite }: EnemyProps) {
   const body = useRef<RapierRigidBody>(null);
   const mainMeshRef = useRef<THREE.Mesh>(null);
   const corpseGroup = useRef<THREE.Group>(null);
@@ -91,10 +92,11 @@ export function Slime({ spawn, index }: { spawn: [number, number]; index: number
   
   const pulsePhase = useRef(Math.random() * Math.PI * 2);
 
-  // Projectiles actifs
+  // Projectiles actifs (chacun porte ses dégâts scalés au moment du tir)
   const [projectiles, setProjectiles] = useState<{
     position: THREE.Vector3;
     direction: THREE.Vector3;
+    dmg: number;
     id: number;
   }[]>([]);
 
@@ -123,10 +125,11 @@ export function Slime({ spawn, index }: { spawn: [number, number]; index: number
   }, [slimeColor]);
 
   // Gestion des projectiles
-  const addProjectile = (startPos: THREE.Vector3, dir: THREE.Vector3) => {
+  const addProjectile = (startPos: THREE.Vector3, dir: THREE.Vector3, dmg: number) => {
     const newProjectile = {
       position: new THREE.Vector3(startPos.x, startPos.y + 0.5, startPos.z),
       direction: dir.clone().normalize(),
+      dmg,
       id: Date.now()
     };
     setProjectiles(prev => [...prev, newProjectile]);
@@ -141,23 +144,13 @@ export function Slime({ spawn, index }: { spawn: [number, number]; index: number
     setProjectiles(prev => prev.filter(p => p.id !== id));
   };
 
-  const { looted } = useEnemyAI({
+  const stats = useMemo(() => scaledStats(slimeType, level), [level]);
+  const { looted, isDead } = useEnemyAI({
     spawn,
     index,
     body,
     corpseGroup,
-    stats: {
-      hp: SLIME_HP,
-      speed: SLIME_SPEED,
-      stopDist: SLIME_STOP_DIST,
-      attackDist: SLIME_ATTACK_DIST,
-      attackCd: SLIME_ATTACK_CD,
-      attackDmg: SLIME_ATTACK_DMG,
-      armor: slimeType.stats.armor,
-      walkSpeed: slimeType.animations.walkSpeed,
-      attackAnimSpeed: slimeType.animations.attackAnimSpeed,
-      deathSpeed: slimeType.animations.deathSpeed,
-    },
+    stats,
     // Le slime rebondit fort quand il est frappé.
     knockback: { xz: 2, y: 2.5 },
     // Attaque à distance : ne crache pas au contact (rester au-delà de 1.5).
@@ -165,7 +158,7 @@ export function Slime({ spawn, index }: { spawn: [number, number]; index: number
     onAttack: (nx, nz) => {
       const t = body.current?.translation();
       if (!t) return;
-      addProjectile(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(nx, 0, nz));
+      addProjectile(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(nx, 0, nz), stats.attackDmg);
     },
     onFlash: (f) => {
       if (mainMeshRef.current) {
@@ -289,14 +282,16 @@ export function Slime({ spawn, index }: { spawn: [number, number]; index: number
             />
           </mesh>
         </group>
+        {!isDead && <EnemyLabel name={slimeType.name} level={level} elite={elite} y={slimeType.height} />}
       </RigidBody>
-      
+
       {/* Projectiles d'acide */}
       {projectiles.map((p) => (
         <AcidProjectile
           key={p.id}
           position={p.position}
           direction={p.direction}
+          dmg={p.dmg}
           onHit={() => removeProjectile(p.id)}
         />
       ))}

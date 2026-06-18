@@ -1,23 +1,21 @@
 import { useMemo, useRef } from "react";
 import { CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { useEnemyAI } from "../enemies/useEnemyAI";
-import {
-  ENEMY_SPEED,
-  ENEMY_STOP_DIST,
-  ENEMY_HP,
-  ENEMY_ATTACK_DIST,
-  ENEMY_ATTACK_CD,
-  ENEMY_ATTACK_DMG,
-} from "../config";
+import { useEnemyAI, type EnemyProps } from "../enemies/useEnemyAI";
+import { EnemyLabel } from "../enemies/EnemyLabel";
+import { scaledStats } from "../enemies/scaling";
+import { ENEMY_TYPES } from "../enemies/enemyTypes";
 
 // Ennemi "poursuiveur" de base — le gobelin (cf. GDD §5) : capsule dynamique
 // Rapier qui avance vers le joueur (lent et lisible). Flash + recul au coup,
 // petite chute à la mort. Toute l'IA/combat vit dans useEnemyAI ; ici on ne
-// garde que l'apparence et les animations propres. Le gobelin conserve ses
-// valeurs historiques de config.ts (échelle de balance du proto).
+// garde que l'apparence et les animations propres. Comme les autres ennemis, le
+// gobelin tire ses stats du catalogue via scaledStats (son entrée porte les
+// anciennes valeurs config.ts ENEMY_* à l'échelle proto, niveau 1).
 
-export function Enemy({ spawn, index }: { spawn: [number, number]; index: number }) {
+const goblinType = ENEMY_TYPES.goblin;
+
+export function Enemy({ spawn, index, level, elite }: EnemyProps) {
   const body = useRef<RapierRigidBody>(null);
   const mat = useRef<THREE.MeshStandardMaterial>(null);
   const corpseGroup = useRef<THREE.Group>(null);
@@ -33,23 +31,13 @@ export function Enemy({ spawn, index }: { spawn: [number, number]; index: number
     return { scale: 0.92 + r() * 0.18, tint: r(), warmEyes: r() > 0.45 };
   }, [spawn]);
 
-  const { looted } = useEnemyAI({
+  const stats = useMemo(() => scaledStats(goblinType, level), [level]);
+  const { looted, isDead } = useEnemyAI({
     spawn,
     index,
     body,
     corpseGroup,
-    stats: {
-      hp: ENEMY_HP,
-      speed: ENEMY_SPEED,
-      stopDist: ENEMY_STOP_DIST,
-      attackDist: ENEMY_ATTACK_DIST,
-      attackCd: ENEMY_ATTACK_CD,
-      attackDmg: ENEMY_ATTACK_DMG,
-      armor: 0,
-      walkSpeed: 5.5,
-      attackAnimSpeed: 3.8,
-      deathSpeed: 3.5,
-    },
+    stats,
     knockback: { xz: 4, y: 1.2 },
     onFlash: (f) => {
       if (mat.current) mat.current.emissive.setScalar(f * 0.9);
@@ -146,6 +134,7 @@ export function Enemy({ spawn, index }: { spawn: [number, number]; index: number
           </mesh>
         </group>
       </group>
+      {!isDead && <EnemyLabel name={goblinType.name} level={level} elite={elite} y={goblinType.height} />}
     </RigidBody>
   );
 }

@@ -25,7 +25,8 @@ export type EnemyBehavior =
 // Stats de base pour chaque type
 // -----------------------------------------------------------------------------
 export interface EnemyStats {
-  // Stats de combat
+  // Stats de combat (échelle PROTO : les PV se comptent en coups d'épée, ~1-6/coup ;
+  // ce sont les valeurs au NIVEAU 1, scalées ensuite par scaledStats() — cf. scaling.ts)
   hp: number;           // Points de vie
   attackDamage: number; // Dégâts par attaque
   attackCooldown: number; // Temps entre les attaques (secondes)
@@ -118,12 +119,14 @@ export const ENEMY_TYPES: Record<string, EnemyType> = {
     description: "Petit humanoïde vert, rapide et agile. Attaque en corps-à-corps.",
     behavior: "fast",
     stats: {
-      hp: 40,
+      // Valeurs live historiques du proto (ex-config.ts ENEMY_*) — mètre-étalon
+      // du niveau 1 sur l'échelle proto.
+      hp: 3,
       attackDamage: 8,
-      attackCooldown: 0.8,
-      attackRange: 1.2,
-      speed: 3.5,
-      stopDistance: 1.0,
+      attackCooldown: 1.0,
+      attackRange: 1.7,
+      speed: 1.8,
+      stopDistance: 1.3,
       armor: 0.0,
       expValue: 25,
       lootTier: 1,
@@ -162,7 +165,7 @@ export const ENEMY_TYPES: Record<string, EnemyType> = {
     description: "Mort-vivant fait d'os. Attaque avec une épée rouillée.",
     behavior: "chaser",
     stats: {
-      hp: 55,
+      hp: 4,
       attackDamage: 12,
       attackCooldown: 1.0,
       attackRange: 1.4,
@@ -206,7 +209,7 @@ export const ENEMY_TYPES: Record<string, EnemyType> = {
     description: "Squelette armé d'un arc. Attaque à distance avec des flèches.",
     behavior: "ranged",
     stats: {
-      hp: 40,
+      hp: 3,
       attackDamage: 10,
       attackCooldown: 2.0,
       attackRange: 8.0,
@@ -250,7 +253,7 @@ export const ENEMY_TYPES: Record<string, EnemyType> = {
     description: "Guerrier imposant et puissant. Attaque avec une hache massive.",
     behavior: "tank",
     stats: {
-      hp: 80,
+      hp: 6,
       attackDamage: 18,
       attackCooldown: 1.2,
       attackRange: 1.6,
@@ -294,7 +297,7 @@ export const ENEMY_TYPES: Record<string, EnemyType> = {
     description: "Créature gélatineuse qui crache de l'acide à distance.",
     behavior: "ranged",
     stats: {
-      hp: 60,
+      hp: 5,
       attackDamage: 14,
       attackCooldown: 2.5,
       attackRange: 7.0,
@@ -340,7 +343,7 @@ export const ENEMY_TYPES: Record<string, EnemyType> = {
     description: "Prédateur rapide qui attaque en groupe. Chasse le joueur.",
     behavior: "fast",
     stats: {
-      hp: 35,
+      hp: 3,
       attackDamage: 10,
       attackCooldown: 0.6,
       attackRange: 1.1,
@@ -384,7 +387,7 @@ export const ENEMY_TYPES: Record<string, EnemyType> = {
     description: "Colosse lent mais extrêmement résistant. Régénère des PV.",
     behavior: "tank",
     stats: {
-      hp: 120,
+      hp: 10,
       attackDamage: 25,
       attackCooldown: 1.5,
       attackRange: 1.8,
@@ -428,7 +431,7 @@ export const ENEMY_TYPES: Record<string, EnemyType> = {
     description: "Créature rapide qui inflige des dégâts de poison.",
     behavior: "fast",
     stats: {
-      hp: 50,
+      hp: 4,
       attackDamage: 12,
       attackCooldown: 0.7,
       attackRange: 1.3,
@@ -472,7 +475,7 @@ export const ENEMY_TYPES: Record<string, EnemyType> = {
     description: "Mage sombre qui invoque des squelettes pour combattre à sa place.",
     behavior: "ranged",
     stats: {
-      hp: 70,
+      hp: 6,
       attackDamage: 0, // N'inflige pas de dégâts directement
       attackCooldown: 5.0, // Temps entre les invocations
       attackRange: 10.0,

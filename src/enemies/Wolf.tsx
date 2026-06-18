@@ -1,18 +1,15 @@
 import { useMemo, useRef } from "react";
 import { CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { useEnemyAI } from "./useEnemyAI";
+import { useEnemyAI, type EnemyProps } from "./useEnemyAI";
+import { EnemyLabel } from "./EnemyLabel";
+import { scaledStats } from "./scaling";
 import { ENEMY_TYPES } from "./enemyTypes";
 
 // Configuration spécifique au Loup
 const wolfType = ENEMY_TYPES.wolf;
 
-const WOLF_SPEED = wolfType.stats.speed;
-const WOLF_STOP_DIST = wolfType.stats.stopDistance;
-const WOLF_HP = wolfType.stats.hp;
-const WOLF_ATTACK_DIST = wolfType.stats.attackRange;
-const WOLF_ATTACK_CD = wolfType.stats.attackCooldown;
-const WOLF_ATTACK_DMG = wolfType.stats.attackDamage;
+// Stats de combat → scaledStats(type, level). On ne garde que le fixe (collider, masse).
 const WOLF_MASS = wolfType.stats.mass;
 const WOLF_COLLIDER_RADIUS = wolfType.stats.colliderRadius;
 const WOLF_COLLIDER_HEIGHT = wolfType.stats.colliderHeight;
@@ -23,7 +20,7 @@ const SECONDARY_COLOR = new THREE.Color(wolfType.appearance.secondaryColor as st
 const ACCENT_COLOR = new THREE.Color(wolfType.appearance.accentColor as string);
 const EYE_COLOR = new THREE.Color(wolfType.appearance.eyeColor as string);
 
-export function Wolf({ spawn, index }: { spawn: [number, number]; index: number }) {
+export function Wolf({ spawn, index, level, elite }: EnemyProps) {
   const body = useRef<RapierRigidBody>(null);
   const mainMeshRef = useRef<THREE.Mesh>(null);
   const corpseGroup = useRef<THREE.Group>(null);
@@ -63,23 +60,13 @@ export function Wolf({ spawn, index }: { spawn: [number, number]; index: number 
     return furColor.clone().multiplyScalar(1.3).lerp(new THREE.Color("#e0e0e0"), 0.4);
   }, [furColor]);
 
-  const { looted } = useEnemyAI({
+  const stats = useMemo(() => scaledStats(wolfType, level), [level]);
+  const { looted, isDead } = useEnemyAI({
     spawn,
     index,
     body,
     corpseGroup,
-    stats: {
-      hp: WOLF_HP,
-      speed: WOLF_SPEED,
-      stopDist: WOLF_STOP_DIST,
-      attackDist: WOLF_ATTACK_DIST,
-      attackCd: WOLF_ATTACK_CD,
-      attackDmg: WOLF_ATTACK_DMG,
-      armor: wolfType.stats.armor,
-      walkSpeed: wolfType.animations.walkSpeed,
-      attackAnimSpeed: wolfType.animations.attackAnimSpeed,
-      deathSpeed: wolfType.animations.deathSpeed,
-    },
+    stats,
     knockback: { xz: 3, y: 1.0 },
     onFlash: (f) => {
       if (mainMeshRef.current) {
@@ -293,6 +280,7 @@ export function Wolf({ spawn, index }: { spawn: [number, number]; index: number 
           )}
         </group>
       </group>
+      {!isDead && <EnemyLabel name={wolfType.name} level={level} elite={elite} y={wolfType.height} />}
     </RigidBody>
   );
 }

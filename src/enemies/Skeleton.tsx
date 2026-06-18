@@ -1,18 +1,16 @@
 import { useMemo, useRef } from "react";
 import { CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { useEnemyAI } from "./useEnemyAI";
+import { useEnemyAI, type EnemyProps } from "./useEnemyAI";
+import { EnemyLabel } from "./EnemyLabel";
+import { scaledStats } from "./scaling";
 import { ENEMY_TYPES } from "./enemyTypes";
 
 // Configuration spécifique au Squelette
 const skeletonType = ENEMY_TYPES.skeleton;
 
-const SKELETON_SPEED = skeletonType.stats.speed;
-const SKELETON_STOP_DIST = skeletonType.stats.stopDistance;
-const SKELETON_HP = skeletonType.stats.hp;
-const SKELETON_ATTACK_DIST = skeletonType.stats.attackRange;
-const SKELETON_ATTACK_CD = skeletonType.stats.attackCooldown;
-const SKELETON_ATTACK_DMG = skeletonType.stats.attackDamage;
+// Stats de combat → scaledStats(type, level). Ici on ne garde que les paramètres
+// physiques/visuels fixes (collider, masse), indépendants du niveau.
 const SKELETON_MASS = skeletonType.stats.mass;
 const SKELETON_COLLIDER_RADIUS = skeletonType.stats.colliderRadius;
 const SKELETON_COLLIDER_HEIGHT = skeletonType.stats.colliderHeight;
@@ -26,7 +24,7 @@ const EYE_COLOR = new THREE.Color(skeletonType.appearance.eyeColor as string);
 // Export pour permettre l'import dans d'autres fichiers
 export const skeletonEnemyType = ENEMY_TYPES.skeleton;
 
-export function Skeleton({ spawn, index }: { spawn: [number, number]; index: number }) {
+export function Skeleton({ spawn, index, level, elite }: EnemyProps) {
   const body = useRef<RapierRigidBody>(null);
   const mat = useRef<THREE.MeshStandardMaterial>(null);
   const corpseGroup = useRef<THREE.Group>(null);
@@ -60,23 +58,13 @@ export function Skeleton({ spawn, index }: { spawn: [number, number]; index: num
     return boneColor.clone().multiplyScalar(0.7);
   }, [boneColor]);
   
-  const { looted } = useEnemyAI({
+  const stats = useMemo(() => scaledStats(skeletonType, level), [level]);
+  const { looted, isDead } = useEnemyAI({
     spawn,
     index,
     body,
     corpseGroup,
-    stats: {
-      hp: SKELETON_HP,
-      speed: SKELETON_SPEED,
-      stopDist: SKELETON_STOP_DIST,
-      attackDist: SKELETON_ATTACK_DIST,
-      attackCd: SKELETON_ATTACK_CD,
-      attackDmg: SKELETON_ATTACK_DMG,
-      armor: skeletonType.stats.armor,
-      walkSpeed: skeletonType.animations.walkSpeed,
-      attackAnimSpeed: skeletonType.animations.attackAnimSpeed,
-      deathSpeed: skeletonType.animations.deathSpeed,
-    },
+    stats,
     knockback: { xz: 3, y: 0.8 },
     onFlash: (f) => {
       if (mat.current) mat.current.emissive.setScalar(f * 0.5);
@@ -250,6 +238,7 @@ export function Skeleton({ spawn, index }: { spawn: [number, number]; index: num
           )}
         </group>
       </group>
+      {!isDead && <EnemyLabel name={skeletonType.name} level={level} elite={elite} y={skeletonType.height} />}
     </RigidBody>
   );
 }

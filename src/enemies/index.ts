@@ -22,14 +22,15 @@ export { Skeleton, skeletonEnemyType, Slime, slimeEnemyType, Orc, orcEnemyType, 
 // =============================================================================
 
 import { ENEMY_TYPES, getEnemyForBiome, getRandomEnemyType } from "./enemyTypes";
+import type { EnemyProps } from "./useEnemyAI";
 
 /**
  * Sélectionne un composant d'ennemi en fonction de son type
  * Usage: const EnemyComponent = getEnemyComponent("skeleton");
- *        <EnemyComponent spawn={[0, 0]} index={0} />
+ *        <EnemyComponent spawn={[0, 0]} index={0} level={1} />
  */
 export function getEnemyComponent(typeId: string) {
-  const components: Record<string, React.ComponentType<{ spawn: [number, number]; index: number }>> = {
+  const components: Record<string, React.ComponentType<EnemyProps>> = {
     goblin: Goblin,
     skeleton: Skeleton,
     slime: Slime,

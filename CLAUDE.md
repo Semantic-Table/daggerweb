@@ -38,10 +38,12 @@ src/
   items/
     itemDefs.ts         Définitions d'objets (armes, armures, consommables) + stats
   enemies/            CATALOGUE & COMPOSANTS D'ENNEMIS (au-delà du gobelin de base)
-    enemyTypes.ts       Catalogue de 9 types (stats/apparence/comportement)
+    enemyTypes.ts       Catalogue de 9 types (stats niveau 1 échelle proto/apparence/comportement)
     useEnemyAI.ts       Hook moteur IA/combat PARTAGÉ (registre, poursuite, attaque,
                         mort, loot, pause) — paramétré par nombres bruts + callbacks
-    index.ts            Exports + sélection de composant/biome (helpers)
+    scaling.ts          scaledStats(type, level) : stats effectives par niveau (croissance linéaire)
+    EnemyLabel.tsx      Label flottant nom + niveau (billboard Text) au-dessus de l'ennemi
+    index.ts            Exports + getEnemyComponent (résolution type → composant)
     Skeleton/Slime/Orc/Wolf.tsx   Composants d'ennemis (meshes + anims via useEnemyAI)
   components/         RENDU (R3F)
     Player.tsx          Capsule dynamique Rapier + caméra + entrées clavier
@@ -91,8 +93,11 @@ RPG « Grimoire » (touche I) inspiré de Daggerfall. Beaucoup d'écrans du menu
 **placeholders** en attendant les mécaniques (or, magie) — état détaillé dans
 [`docs/todo-ui-rpg.md`](docs/todo-ui-rpg.md).
 
-Le module `enemies/` fournit un **catalogue** de 9 types ; les 5 composants existants
-(gobelin + Skeleton/Slime/Orc/Wolf) partagent le moteur `useEnemyAI`. En jeu,
-`Enemies.tsx` instancie pour l'instant le gobelin de base — le câblage des autres types
-et le **scaling par niveau** sont planifiés dans [`docs/roadmap-niveaux.md`](docs/roadmap-niveaux.md)
-(Phase 1 = niveau de donjon, faite). Autres pistes : [`docs/roadmap.md`](docs/roadmap.md).
+Le module `enemies/` fournit un **catalogue** de 9 types (stats au niveau 1, échelle
+proto) ; les 5 composants (gobelin + Skeleton/Slime/Orc/Wolf) partagent le moteur
+`useEnemyAI` et tirent leurs stats du catalogue via `scaledStats(type, level)`. En jeu,
+`dungeonGen` choisit pour chaque spawn un **type** (pool débloqué par niveau de donjon)
+et un **niveau** (≈ niveau du donjon ±), et `Enemies.tsx` instancie via
+`getEnemyComponent`. Un **label flottant** (nom + niveau) coiffe chaque ennemi.
+Détail & suites : [`docs/roadmap-niveaux.md`](docs/roadmap-niveaux.md) (Phases 1-2 faites).
+Autres pistes : [`docs/roadmap.md`](docs/roadmap.md).

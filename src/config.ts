@@ -44,13 +44,10 @@ export const STAMINA_REGEN = 0.05;      // Régénération par seconde (fraction
 export const RUN_STAMINA_COST = 0.1;   // Coût par seconde en courant (fraction de maxStamina)
 export const ATTACK_STAMINA_COST = 0.08; // Coût par attaque (fraction de maxStamina)
 
-// Ennemis
-export const ENEMY_SPEED = 1.8;
-export const ENEMY_STOP_DIST = 1.3;
-export const ENEMY_HP = 3;
-export const ENEMY_ATTACK_DIST = 1.7;
-export const ENEMY_ATTACK_CD = 1;
-export const ENEMY_ATTACK_DMG = 8;
+// Ennemis : les stats de base vivent désormais dans le catalogue
+// (`src/enemies/enemyTypes.ts`, entrée par type), à l'échelle proto. Le gobelin
+// y a son entrée comme les autres ; le scaling par niveau passe par
+// `scaledStats()` (cf. ci-dessous + docs/roadmap-niveaux.md).
 
 // ==========================================================================
 // Armures (cf. docs/roadmap-armures.md)
@@ -88,7 +85,12 @@ export const DUNGEON_MAX_ENEMIES = 4;
 // ==========================================================================
 // Niveaux (cf. docs/roadmap-niveaux.md)
 // ==========================================================================
-// Phase 1 : niveau de donjon, dérivé de la distance au spawn dans l'overworld.
-// Les constantes de croissance des stats (HP_GROWTH, DMG_GROWTH…) arrivent en Phase 2.
+// Niveau de donjon : dérivé de la distance au spawn dans l'overworld.
 export const LEVEL_MAX = 20;          // niveau maximum (donjon & ennemi)
 export const LEVEL_DIST_STEP = 40;    // unités monde par palier de difficulté
+
+// Scaling des stats d'ennemi par niveau (croissance LINÉAIRE, cf. scaledStats).
+// Au niveau 1 (g = 0) : stats du catalogue inchangées. Puis +x% par niveau.
+export const HP_GROWTH = 0.35;        // +35% PV par niveau au-dessus de 1
+export const DMG_GROWTH = 0.15;       // +15% dégâts par niveau
+export const ARMOR_GROWTH = 0.0;      // +0 armure/niveau au départ (plafonné à 0.9)

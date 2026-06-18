@@ -1,18 +1,15 @@
 import { useMemo, useRef } from "react";
 import { CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { useEnemyAI } from "./useEnemyAI";
+import { useEnemyAI, type EnemyProps } from "./useEnemyAI";
+import { EnemyLabel } from "./EnemyLabel";
+import { scaledStats } from "./scaling";
 import { ENEMY_TYPES } from "./enemyTypes";
 
 // Configuration spécifique à l'Orc
 const orcType = ENEMY_TYPES.orc;
 
-const ORC_SPEED = orcType.stats.speed;
-const ORC_STOP_DIST = orcType.stats.stopDistance;
-const ORC_HP = orcType.stats.hp;
-const ORC_ATTACK_DIST = orcType.stats.attackRange;
-const ORC_ATTACK_CD = orcType.stats.attackCooldown;
-const ORC_ATTACK_DMG = orcType.stats.attackDamage;
+// Stats de combat → scaledStats(type, level). On ne garde que le fixe (collider, masse).
 const ORC_MASS = orcType.stats.mass;
 const ORC_COLLIDER_RADIUS = orcType.stats.colliderRadius;
 const ORC_COLLIDER_HEIGHT = orcType.stats.colliderHeight;
@@ -23,7 +20,7 @@ const SECONDARY_COLOR = new THREE.Color(orcType.appearance.secondaryColor as str
 const ACCENT_COLOR = new THREE.Color(orcType.appearance.accentColor as string);
 const EYE_COLOR = new THREE.Color(orcType.appearance.eyeColor as string);
 
-export function Orc({ spawn, index }: { spawn: [number, number]; index: number }) {
+export function Orc({ spawn, index, level, elite }: EnemyProps) {
   const body = useRef<RapierRigidBody>(null);
   const mat = useRef<THREE.MeshStandardMaterial>(null);
   const corpseGroup = useRef<THREE.Group>(null);
@@ -58,23 +55,13 @@ export function Orc({ spawn, index }: { spawn: [number, number]; index: number }
     return skinColor.clone().multiplyScalar(0.65);
   }, [skinColor]);
 
-  const { looted } = useEnemyAI({
+  const stats = useMemo(() => scaledStats(orcType, level), [level]);
+  const { looted, isDead } = useEnemyAI({
     spawn,
     index,
     body,
     corpseGroup,
-    stats: {
-      hp: ORC_HP,
-      speed: ORC_SPEED,
-      stopDist: ORC_STOP_DIST,
-      attackDist: ORC_ATTACK_DIST,
-      attackCd: ORC_ATTACK_CD,
-      attackDmg: ORC_ATTACK_DMG,
-      armor: orcType.stats.armor,
-      walkSpeed: orcType.animations.walkSpeed,
-      attackAnimSpeed: orcType.animations.attackAnimSpeed,
-      deathSpeed: orcType.animations.deathSpeed,
-    },
+    stats,
     knockback: { xz: 2, y: 0.5 },
     onFlash: (f) => {
       if (mat.current) mat.current.emissive.setScalar(f * 0.7);
@@ -335,6 +322,7 @@ export function Orc({ spawn, index }: { spawn: [number, number]; index: number }
           )}
         </group>
       </group>
+      {!isDead && <EnemyLabel name={orcType.name} level={level} elite={elite} y={orcType.height} />}
     </RigidBody>
   );
 }

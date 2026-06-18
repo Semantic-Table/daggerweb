@@ -40,6 +40,16 @@ export interface EnemyMotion {
   dt: number;
 }
 
+/** Props communes à tous les composants d'ennemi (instanciés par `Enemies.tsx`). */
+export interface EnemyProps {
+  spawn: [number, number];
+  index: number;
+  /** Niveau de l'ennemi (≈ niveau du donjon ± écart). Pilote `scaledStats`. */
+  level: number;
+  /** Tirage « élite » (niveau donjon + 2) — pour le label / les variantes visuelles. */
+  elite?: boolean;
+}
+
 /** Nombres de gameplay dont le moteur a besoin (source au choix de l'appelant). */
 export interface EnemyAIStats {
   hp: number;
@@ -84,6 +94,8 @@ export interface UseEnemyAIOptions {
 export interface EnemyAIResult {
   /** Vrai une fois le cadavre fouillé (pour assombrir le rendu). */
   looted: boolean;
+  /** Vrai dès la mort (réactif) — ex: masquer le label flottant. */
+  isDead: boolean;
 }
 
 export function useEnemyAI(opts: UseEnemyAIOptions): EnemyAIResult {
@@ -111,6 +123,7 @@ export function useEnemyAI(opts: UseEnemyAIOptions): EnemyAIResult {
   const walkPhase = useRef(0);
   const attackAnim = useRef(0);
   const [looted, setLooted] = useState(false);
+  const [isDead, setIsDead] = useState(false);
   const tmp = useMemo(() => new THREE.Vector3(), []);
 
   // Coups en attente : `hit` (appelé depuis un event DOM par l'épée) n'altère
@@ -152,6 +165,7 @@ export function useEnemyAI(opts: UseEnemyAIOptions): EnemyAIResult {
   // Sort du registre tout de suite pour ne plus être ciblé ni lu par l'épée.
   function die() {
     dead.current = true;
+    setIsDead(true);
     if (handleRef.current) enemyRegistry.delete(handleRef.current);
     // Génère le loot et enregistre le cadavre une fois qu'il a touché le sol.
     setTimeout(() => {
@@ -259,5 +273,5 @@ export function useEnemyAI(opts: UseEnemyAIOptions): EnemyAIResult {
     onAnimate.current?.({ ws, aa, dist: d, phase: walkPhase.current, dt });
   });
 
-  return { looted };
+  return { looted, isDead };
 }

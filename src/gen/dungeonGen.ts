@@ -4,6 +4,7 @@ import {
   DUNGEON_SIZE,
   DUNGEON_ENEMY_MIN_DIST,
   DUNGEON_MAX_ENEMIES,
+  LEVEL_MAX,
 } from "../config";
 import {
   WallBlockType,
@@ -34,10 +35,29 @@ export interface WallPanel {
   rot: number; // 0 = mur orienté E/O (s'étend sur X), PI/2 = mur orienté N/S (s'étend sur Z)
 }
 
+// Un spawn d'ennemi : position + type (id catalogue) + niveau (≈ niveau du donjon ±).
+export interface EnemySpawn {
+  x: number;
+  z: number;
+  typeId: string;
+  level: number;
+  elite: boolean; // tirage « élite » (niveau donjon + 2)
+}
+
+// Types d'ennemis débloqués par niveau de donjon (ids IMPLÉMENTÉS uniquement —
+// le rendu passe par getEnemyComponent). Plus le donjon monte, plus le pool s'élargit.
+const ENEMY_UNLOCKS: { id: string; level: number }[] = [
+  { id: "goblin", level: 1 },
+  { id: "wolf", level: 1 },
+  { id: "slime", level: 2 },
+  { id: "skeleton", level: 3 },
+  { id: "orc", level: 5 },
+];
+
 export interface DungeonData {
   floors: [number, number][]; // centres monde des cellules praticables
   panels: WallPanel[];
-  enemies: [number, number][]; // positions de spawn des ennemis
+  enemies: EnemySpawn[]; // spawns d'ennemis (position + type + niveau)
   spawn: [number, number, number]; // position de l'œil
   exit: [number, number, number]; // seuil de retour vers l'overworld
   exitRot: number; // orientation du seuil (Y)
@@ -231,14 +251,22 @@ export function generateDungeon(seed: number, level: number = 1): DungeonData {
   }
 
   // --- 6. Ennemis : cases praticables éloignées du spawn (déterministe) ---
+  // Chaque ennemi tire un TYPE (dans le pool débloqué au niveau du donjon) et un
+  // NIVEAU autour de celui du donjon : ~60% au niveau, ~30% à ±1, ~10% élite +2.
   const pool = floors.filter(
     ([x, z]) => Math.hypot(x - sx, z - sz) > DUNGEON_ENEMY_MIN_DIST
   );
-  const enemies: [number, number][] = [];
+  const unlocked = ENEMY_UNLOCKS.filter((u) => u.level <= level);
+  const enemies: EnemySpawn[] = [];
   const n = Math.min(DUNGEON_MAX_ENEMIES, pool.length);
   for (let i = 0; i < n; i++) {
     const k = Math.floor(rng() * pool.length);
-    enemies.push(pool.splice(k, 1)[0]);
+    const [x, z] = pool.splice(k, 1)[0];
+    const typeId = unlocked[Math.floor(rng() * unlocked.length)].id;
+    const r = rng();
+    const offset = r < 0.6 ? 0 : r < 0.9 ? (rng() < 0.5 ? -1 : 1) : 2;
+    const eLevel = Math.max(1, Math.min(LEVEL_MAX, level + offset));
+    enemies.push({ x, z, typeId, level: eLevel, elite: offset === 2 });
   }
 
   return {
