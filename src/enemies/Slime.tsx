@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
-import { CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/rapier";
+import { BallCollider, CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { playerPos } from "../combat/playerState";
 import { damagePlayer } from "../combat/playerCombat";
@@ -24,7 +24,7 @@ const PRIMARY_COLOR = new THREE.Color(slimeType.appearance.primaryColor as strin
 const SECONDARY_COLOR = new THREE.Color(slimeType.appearance.secondaryColor as string);
 const ACCENT_COLOR = new THREE.Color(slimeType.appearance.accentColor as string);
 
-// Composant Projectile pour l'acide
+// Composant Projectile pour l'acide — RigidBody Rapier pour collisions avec les murs
 function AcidProjectile({
   position,
   direction,
@@ -36,51 +36,63 @@ function AcidProjectile({
   dmg: number;
   onHit: () => void
 }) {
-  const projectileRef = useRef<THREE.Mesh>(null);
+  const projectileRef = useRef<RapierRigidBody>(null);
   const [alive, setAlive] = useState(true);
   const speed = 8;
   const lifetime = useRef(0);
-  
+
+  useEffect(() => {
+    if (!projectileRef.current) return;
+    const vel = direction.clone().normalize().multiplyScalar(speed);
+    projectileRef.current.setLinvel({ x: vel.x, y: vel.y, z: vel.z }, true);
+  }, []);
+
   useFrame((_, dt) => {
     if (!alive || !projectileRef.current) return;
-    
+
     lifetime.current += dt;
     if (lifetime.current > 3) {
       setAlive(false);
       return;
     }
-    
-    const p = projectileRef.current.position;
-    p.add(direction.clone().multiplyScalar(speed * dt));
-    
-    // Vérifier collision avec le joueur (simplifié)
+
+    const t = projectileRef.current.translation();
     const distToPlayer = new THREE.Vector3(
-      playerPos.x - p.x,
+      playerPos.x - t.x,
       0,
-      playerPos.z - p.z
+      playerPos.z - t.z
     ).length();
-    
+
     if (distToPlayer < 0.5) {
       damagePlayer(dmg);
       onHit();
       setAlive(false);
     }
   });
-  
+
   if (!alive) return null;
-  
+
   return (
-    <mesh ref={projectileRef} position={[position.x, position.y, position.z]}>
-      <sphereGeometry args={[0.08, 6, 5]} />
-      <meshStandardMaterial 
-        color={ACCENT_COLOR} 
-        emissive={ACCENT_COLOR} 
-        emissiveIntensity={1.5}
-        roughness={0.3}
-        transparent
-        opacity={0.8}
-      />
-    </mesh>
+    <RigidBody
+      ref={projectileRef}
+      type="dynamic"
+      colliders={false}
+      gravityScale={0}
+      position={[position.x, position.y, position.z]}
+    >
+      <BallCollider args={[0.08]} />
+      <mesh>
+        <sphereGeometry args={[0.08, 6, 5]} />
+        <meshStandardMaterial
+          color={ACCENT_COLOR}
+          emissive={ACCENT_COLOR}
+          emissiveIntensity={1.5}
+          roughness={0.3}
+          transparent
+          opacity={0.8}
+        />
+      </mesh>
+    </RigidBody>
   );
 }
 
@@ -181,8 +193,7 @@ export function Slime({ spawn, index, level, elite }: EnemyProps) {
       }
       // Rebond en marchant.
       if (dist > SLIME_STOP_DIST && corpseGroup.current) {
-        const t = body.current?.translation();
-        if (t) corpseGroup.current.position.y = t.y + Math.sin(Date.now() * 0.003) * variant.bounceAmplitude;
+        corpseGroup.current.position.y = Math.sin(Date.now() * 0.003) * variant.bounceAmplitude;
       }
       // Yeux qui flottent légèrement.
       if (eyeGroupRef.current && variant.hasEyes) {

@@ -331,7 +331,7 @@ export const ENEMY_TYPES: Record<string, EnemyType> = {
     },
     scale: 0.9,
     height: 1.2,
-    colliderOffsetY: 0.3,
+    colliderOffsetY: 0.95,
   },
 
   // ---------------------------------------------------------------------------

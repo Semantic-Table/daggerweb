@@ -1,12 +1,16 @@
-import { Billboard, Text } from "@react-three/drei";
+import { Html } from "@react-three/drei";
 
-// Étiquette flottante au-dessus d'un ennemi : son NOM + son NIVEAU, orientée
-// caméra (Billboard). Placée comme FRÈRE du groupe d'orientation (corpseGroup)
-// pour ne pas tourner avec le corps — le Billboard gère le face-caméra.
+// Étiquette flottante au-dessus d'un ennemi : son NOM + son NIVEAU.
 //
-// ⚠️ Lisibilité : le jeu rend à `dpr` très bas (pixelisation). On compense avec
-// une police généreuse + un fort contour noir. Si le texte 3D « bave » trop,
-// repli possible sur <Html> de drei (overlay DOM net) — cf. docs/roadmap-niveaux.md.
+// ⚠️ Lisibilité : le jeu rend à `dpr` très bas (pixelisation, cf. App.tsx).
+// Un <Text> 3D vivrait DANS ce framebuffer basse résolution → illisible. On
+// passe donc par <Html> de drei : le label est un vrai nœud DOM projeté à la
+// position 3D, rendu PAR-DESSUS le canvas → net, hors pixelisation. Le style
+// vit dans `.mob-label` (style.css), police pixel + contour dur 1px pour rester
+// raccord avec le rendu. <Html> fait face-caméra par défaut (plus de Billboard).
+//
+// `distanceFactor` lie la taille du label à la distance 3D (il rapetisse au
+// loin) ; sans lui le label garderait une taille écran constante.
 
 export function EnemyLabel({
   name,
@@ -21,19 +25,14 @@ export function EnemyLabel({
 }) {
   const text = elite ? `Élite · ${name} — niv. ${level}` : `${name} — niv. ${level}`;
   return (
-    <Billboard position={[0, y, 0]}>
-      <Text
-        fontSize={0.26}
-        color={elite ? "#ffd36b" : "#e8e2d0"}
-        anchorX="center"
-        anchorY="bottom"
-        outlineWidth={0.022}
-        outlineColor="#000000"
-        // Évite que le texte traverse les murs de façon trop visible.
-        depthOffset={-1}
-      >
-        {text}
-      </Text>
-    </Billboard>
+    <Html
+      position={[0, y - 0.4, 0]}
+      center
+      distanceFactor={9}
+      zIndexRange={[10, 0]}
+      wrapperClass="mob-label-wrap"
+    >
+      <div className={elite ? "mob-label elite" : "mob-label"}>{text}</div>
+    </Html>
   );
 }

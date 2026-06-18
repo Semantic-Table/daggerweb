@@ -73,6 +73,22 @@ body {
   font-family: "VT323", ui-monospace, "Courier New", monospace;
 }
 
+/* ── Étiquette flottante de mob (overlay DOM via drei <Html>) ──────────────
+   Rendue PAR-DESSUS le canvas → échappe au dpr bas (pixelisation) et reste
+   lisible. Contour dur 1px (8 directions, sans flou) pour parler la langue
+   pixel du reste du jeu. */
+.mob-label-wrap { pointer-events: none; }   /* wrapper drei : transparent aux clics */
+.mob-label {
+  font-family: "VT323", ui-monospace, "Courier New", monospace;
+  font-size: 18px; line-height: 1; letter-spacing: 0.04em;
+  color: var(--bone); white-space: nowrap;
+  pointer-events: none; user-select: none;
+  text-shadow:
+    1px 0 0 #000, -1px 0 0 #000, 0 1px 0 #000, 0 -1px 0 #000,
+    1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+}
+.mob-label.elite { color: var(--gold); }
+
 /* ── Overlay d'accueil / pause ───────────────────────────────────────────*/
 .overlay {
   position: fixed; inset: 0; display: flex;

@@ -224,32 +224,40 @@ export function generateDungeon(seed: number, level: number = 1): DungeonData {
     }
   }
 
-  // --- 4. Spawn (centre de la 1re salle) ---
-  const spawnRoom = rooms[0];
-  const [scx, scy] = rectCenter(spawnRoom);
-  const [sx, sz] = toWorld(scx, scy);
-
-  // --- 5. Sortie : centre de la salle la plus éloignée, plaqué contre un mur ---
+  // --- 4 & 5. Seuil de sortie + spawn du joueur ---
+  // Salle de sortie : la plus éloignée du centre de rooms[0].
+  const [r0cx, r0cy] = rectCenter(rooms[0]);
+  const [r0x, r0z] = toWorld(r0cx, r0cy);
   let exitRoom = rooms[0];
   let maxDist = -1;
   for (const r of rooms) {
     const [cx, cy] = rectCenter(r);
     const [wx, wz] = toWorld(cx, cy);
-    const dist = Math.hypot(wx - sx, wz - sz);
-    if (dist > maxDist) {
-      maxDist = dist;
-      exitRoom = r;
-    }
+    const dist = Math.hypot(wx - r0x, wz - r0z);
+    if (dist > maxDist) { maxDist = dist; exitRoom = r; }
   }
-  const [ecx, ecy] = rectCenter(exitRoom);
-  const [ex, ez] = toWorld(ecx, ecy);
-  let exit: [number, number, number] = [ex, 0, ez];
+
+  // Cherche une cellule du périmètre de exitRoom qui borde un mur réel (pas le centre).
+  // Prend la cellule médiane de la première face trouvée pour centrer la porte.
+  let exit: [number, number, number] = [r0x, 0, r0z];
   let exitRot = 0;
-  for (const d of dirs) {
-    if (isFloor(g, ecx + d.dx, ecy + d.dy)) continue;
-    exit = [ex + d.ox * 0.9, 0, ez + d.oz * 0.9];
+  let sx = r0x, sz = r0z;
+
+  exitSearch: for (const d of dirs) {
+    const wallCells: [number, number][] = [];
+    for (let cy = exitRoom.y; cy < exitRoom.y + exitRoom.h; cy++)
+      for (let cx = exitRoom.x; cx < exitRoom.x + exitRoom.w; cx++)
+        if (isFloor(g, cx, cy) && !isFloor(g, cx + d.dx, cy + d.dy))
+          wallCells.push([cx, cy]);
+    if (wallCells.length === 0) continue;
+    const [wcx, wcy] = wallCells[Math.floor(wallCells.length / 2)];
+    const [wx, wz] = toWorld(wcx, wcy);
+    exit = [wx + d.ox * 0.95, 0, wz + d.oz * 0.95];
     exitRot = d.rot;
-    break;
+    // Spawn à cette même cellule : le joueur entre par la porte de sortie
+    sx = wx;
+    sz = wz;
+    break exitSearch;
   }
 
   // --- 6. Ennemis : cases praticables éloignées du spawn (déterministe) ---
