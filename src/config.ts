@@ -39,10 +39,14 @@ export const CRIT_PER_LUCK = 0.002;   // Chance de critique par point de CHN (0-
 // Vigueur (Fatigue) - Phase 4
 // ============================================================================
 
-export const FAT_K = 0.8;               // Coefficient pour maxStamina
-export const STAMINA_REGEN = 0.05;      // Régénération par seconde (fraction de maxStamina)
-export const RUN_STAMINA_COST = 0.1;   // Coût par seconde en courant (fraction de maxStamina)
-export const ATTACK_STAMINA_COST = 0.08; // Coût par attaque (fraction de maxStamina)
+// Vigueur = jauge 0..1. Les coûts/régen sont des FRACTIONS de la jauge, pas des
+// valeurs absolues — `maxStamina()` ne sert qu'au pool AFFICHÉ (cosmétique), pas
+// au calcul. Le poids des attributs passe par la régen (cf. STAMINA_REGEN_PER_END).
+export const FAT_K = 0.8;                  // Coefficient du pool affiché (cosmétique)
+export const STAMINA_REGEN = 0.20;         // Régén/s — recharge complète ~5 s
+export const STAMINA_REGEN_PER_END = 0.01; // +1 % de régén par point d'END au-dessus de 30
+export const RUN_STAMINA_COST = 0.32;      // Coût/s en courant — sprint ~8 s depuis plein
+export const ATTACK_STAMINA_COST = 0.12;   // Coût/attaque — cadence soutenable ~1,7 coup/s
 
 // Ennemis : les stats de base vivent désormais dans le catalogue
 // (`src/enemies/enemyTypes.ts`, entrée par type), à l'échelle proto. Le gobelin

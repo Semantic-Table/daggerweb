@@ -11,7 +11,6 @@ import {
   canRun,
   useStamina,
   encumbranceMult,
-  maxStamina,
 } from "../combat/character";
 import { getTotalWeight } from "../combat/inventory";
 import { PLAYER_WALK, PLAYER_RUN, PLAYER_EYE, RUN_STAMINA_COST } from "../config";
@@ -49,11 +48,9 @@ export function Player({ spawn }: { spawn: [number, number, number] }) {
     const { forward, back, left, right: rk, run } = get();
     const isMoving = forward || back || left || rk;
     
-    // En courant : coût de vigueur par frame
+    // En courant : coût de vigueur par frame (fraction de jauge, ∝ temps écoulé)
     if (run && isMoving && canRun()) {
-      // Coût proportionnel au temps écoulé
-      const staminaCost = RUN_STAMINA_COST * dt;
-      if (!useStamina(staminaCost * maxStamina())) {
+      if (!useStamina(RUN_STAMINA_COST * dt)) {
         // Plus assez de vigueur pour courir
         return;
       }

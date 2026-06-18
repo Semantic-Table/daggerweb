@@ -91,6 +91,7 @@ import {
   SKILL_XP_BASE,
   FAT_K,
   STAMINA_REGEN,
+  STAMINA_REGEN_PER_END,
 } from "../config";
 
 /** PV maximum = base + END * coefficient. */
@@ -143,19 +144,25 @@ export function staminaPercent(): number {
   return state.stamina * 100;
 }
 
-/** Utilise de la vigueur (retourne false si pas assez). */
-export function useStamina(amount: number): boolean {
-  if (state.stamina * maxStamina() < amount) return false;
-  state.stamina = Math.max(0, state.stamina - amount / maxStamina());
+/** Multiplicateur de régén de vigueur — l'END donne du souffle au combat. */
+export function staminaRegenMult(): number {
+  return 1 + (state.attrs.END - ATTR_BASE) * STAMINA_REGEN_PER_END;
+}
+
+/** Dépense une FRACTION (0..1) de la jauge. Retourne false si insuffisant. */
+export function useStamina(frac: number): boolean {
+  if (state.stamina < frac) return false;
+  state.stamina = Math.max(0, state.stamina - frac);
   notify();
   return true;
 }
 
-/** Régénère de la vigueur (appelé chaque frame). */
+/** Régénère de la vigueur (appelé chaque frame). Continue tant que la jauge
+ * n'est pas pleine ; une fois à 1, on ne notifie plus (évite un re-render +
+ * une sauvegarde localStorage à chaque frame pour rien). */
 export function regenStamina(dt: number): void {
-  const regen = STAMINA_REGEN * dt;
-  state.stamina = Math.min(1.0, state.stamina + regen);
-  if (state.stamina >= 1.0) state.stamina = 1.0;
+  if (state.stamina >= 1.0) return;
+  state.stamina = Math.min(1.0, state.stamina + STAMINA_REGEN * staminaRegenMult() * dt);
   notify();
 }
 

@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { enemyRegistry } from "../combat/enemyRegistry";
 import { getInventory, subscribeInventory } from "../combat/inventory";
 import { gainXp, effectiveDmg, effectiveSwingDur } from "../combat/skills";
-import { gainAttrPractice, SKILL_GOV, meleeMult, critChance, useStamina, maxStamina } from "../combat/character";
+import { gainAttrPractice, SKILL_GOV, meleeMult, critChance, useStamina } from "../combat/character";
 import { SWORD_REACH, SWORD_FIST_REACH, SWORD_CONE, SKILL_XP_PER_HIT, ATTACK_STAMINA_COST } from "../config";
 
 // Arme corps-à-corps (cf. GDD §5). Le viewmodel est rendu comme ENFANT de la
@@ -64,9 +64,8 @@ export function Sword({ onHit, onCrit }: SwordProps) {
     const onDown = (e: MouseEvent) => {
       if (e.button !== 0 || document.pointerLockElement == null || swinging.current) return;
       
-      // Vérifier si on a assez de vigueur pour attaquer
-      const staminaCost = ATTACK_STAMINA_COST * maxStamina();
-      if (!useStamina(staminaCost)) {
+      // Vérifier si on a assez de vigueur pour attaquer (coût = fraction de jauge)
+      if (!useStamina(ATTACK_STAMINA_COST)) {
         // Pas assez de vigueur, ne pas attaquer
         return;
       }

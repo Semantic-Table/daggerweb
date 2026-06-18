@@ -18,7 +18,7 @@ import { setDamageHandler } from "./combat/playerCombat";
 import { getInventory, subscribeInventory, getArmorClass, pickupItem } from "./combat/inventory";
 import { getSkills, subscribeSkills, levelInfo, skillBonus, CATEGORY_LABEL } from "./combat/skills";
 import { gameState } from "./combat/gameState";
-import { maxHp, subscribeCharacter, setOnAttrLevelUp, ATTR_LABEL } from "./combat/character";
+import { maxHp, staminaPercent, subscribeCharacter, setOnAttrLevelUp, ATTR_LABEL } from "./combat/character";
 import type { Attr } from "./combat/character";
 import type { CorpseHandle } from "./combat/corpseRegistry";
 import { PLAYER_IFRAMES_MS } from "./config";
@@ -332,6 +332,9 @@ export function App() {
 
       <div className="healthbar">
         <div className="healthbar-fill" style={{ width: `${(hp / maxHp()) * 100}%` }} />
+      </div>
+      <div className="staminabar">
+        <div className="staminabar-fill" style={{ width: `${staminaPercent()}%` }} />
       </div>
 
       <div className={`skillbar${levelup ? " skillbar--up" : ""}`}>
