@@ -39,6 +39,7 @@ export function Enemy({ spawn, index, level, elite }: EnemyProps) {
     corpseGroup,
     stats,
     knockback: { xz: 4, y: 1.2 },
+    lootLevel: level + (goblinType.stats.lootTier - 1),
     onFlash: (f) => {
       if (mat.current) mat.current.emissive.setScalar(f * 0.9);
     },

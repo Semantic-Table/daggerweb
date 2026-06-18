@@ -165,9 +165,22 @@ export const ITEMS: Record<string, ItemDef> = {
   },
 };
 
-/** Loot table d'un ennemi : retourne 0-2 items selon un seed. */
-export function rollLoot(rng: () => number): ItemDef[] {
-  const weapons: ItemDef[] = [ITEMS.sword_iron, ITEMS.sword_bone, ITEMS.axe_crude];
+/** Tire un objet d'un pool en biaisant vers la VALEUR quand le niveau monte.
+ *  Au niveau 1 (skew = 1) → tirage uniforme ; aux niveaux supérieurs, `rng^skew`
+ *  pousse l'index vers le haut du pool trié par valeur croissante. */
+function pickByValue(rng: () => number, pool: ItemDef[], level: number): ItemDef {
+  const sorted = [...pool].sort((a, b) => a.value - b.value);
+  const skew = 1 / (1 + (level - 1) * 0.2);
+  const t = Math.pow(rng(), skew);
+  return sorted[Math.min(sorted.length - 1, Math.floor(t * sorted.length))];
+}
+
+/** Loot table d'un ennemi (cf. roadmap-niveaux Phase 4) : retourne 0-3 items.
+ *  `level` = niveau de loot de l'ennemi (≈ son niveau + bonus de lootTier du type).
+ *  Plus il est élevé : drops plus probables ET objets de plus grande valeur. */
+export function rollLoot(rng: () => number, level: number = 1): ItemDef[] {
+  // Pools triés implicitement par valeur dans pickByValue (rouillée → fer, etc.).
+  const weapons: ItemDef[] = [ITEMS.sword_rusty, ITEMS.sword_bone, ITEMS.axe_crude, ITEMS.sword_iron];
   const potions: ItemDef[] = [ITEMS.potion_small, ITEMS.potion_large];
   // Armures : mélange light et heavy pour chaque slot
   const armors: ItemDef[] = [
@@ -176,12 +189,14 @@ export function rollLoot(rng: () => number): ItemDef[] {
     ITEMS.iron_helmet, ITEMS.chainmail, ITEMS.plate_leggings, ITEMS.iron_gauntlets,
     ITEMS.iron_boots, ITEMS.tower_shield,
   ];
+  // Probabilités de drop : montent légèrement avec le niveau (plafonnées).
+  const g = level - 1;
+  const pWeapon = Math.min(0.7, 0.45 + 0.02 * g);
+  const pPotion = Math.min(0.6, 0.35 + 0.015 * g);
+  const pArmor = Math.min(0.6, 0.25 + 0.02 * g);
   const result: ItemDef[] = [];
-  // 55% de chance d'avoir une arme
-  if (rng() < 0.55) result.push(weapons[Math.floor(rng() * weapons.length)]);
-  // 40% de chance d'avoir une potion
-  if (rng() < 0.40) result.push(potions[Math.floor(rng() * potions.length)]);
-  // 30% de chance d'avoir une armure
-  if (rng() < 0.30) result.push(armors[Math.floor(rng() * armors.length)]);
+  if (rng() < pWeapon) result.push(pickByValue(rng, weapons, level));
+  if (rng() < pPotion) result.push(pickByValue(rng, potions, level));
+  if (rng() < pArmor) result.push(pickByValue(rng, armors, level));
   return result;
 }

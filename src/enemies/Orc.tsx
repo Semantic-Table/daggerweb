@@ -63,6 +63,7 @@ export function Orc({ spawn, index, level, elite }: EnemyProps) {
     corpseGroup,
     stats,
     knockback: { xz: 2, y: 0.5 },
+    lootLevel: level + (orcType.stats.lootTier - 1),
     onFlash: (f) => {
       if (mat.current) mat.current.emissive.setScalar(f * 0.7);
     },

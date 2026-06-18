@@ -66,6 +66,7 @@ export function Skeleton({ spawn, index, level, elite }: EnemyProps) {
     corpseGroup,
     stats,
     knockback: { xz: 3, y: 0.8 },
+    lootLevel: level + (skeletonType.stats.lootTier - 1),
     onFlash: (f) => {
       if (mat.current) mat.current.emissive.setScalar(f * 0.5);
     },

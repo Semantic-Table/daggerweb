@@ -153,6 +153,7 @@ export function Slime({ spawn, index, level, elite }: EnemyProps) {
     stats,
     // Le slime rebondit fort quand il est frappé.
     knockback: { xz: 2, y: 2.5 },
+    lootLevel: level + (slimeType.stats.lootTier - 1),
     // Attaque à distance : ne crache pas au contact (rester au-delà de 1.5).
     minAttackDist: 1.5,
     onAttack: (nx, nz) => {

@@ -68,6 +68,7 @@ export function Wolf({ spawn, index, level, elite }: EnemyProps) {
     corpseGroup,
     stats,
     knockback: { xz: 3, y: 1.0 },
+    lootLevel: level + (wolfType.stats.lootTier - 1),
     onFlash: (f) => {
       if (mainMeshRef.current) {
         const m = mainMeshRef.current.material as THREE.MeshStandardMaterial;

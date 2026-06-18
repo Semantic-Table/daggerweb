@@ -262,11 +262,13 @@ calculée par `characterLevel()`), à confronter au niveau de donjon.
 
   → *Les donjons de haut niveau sont plus peuplés ET penchent vers les types costauds.*
 
-### Phase 4 — Feedback & loot
+### Phase 4 — Feedback & loot ✅ (cue élite optionnel restant)
 - [x] Niveau affiché dans le Grimoire / la carte (fait en Phase 1).
 - [x] Label flottant nom + niveau au-dessus de l'ennemi (`EnemyLabel`), élite distinguée (or + préfixe « Élite »).
-- [ ] Indice visuel d'élite plus marqué (taille / aura) — optionnel.
-- [ ] `lootTier` modulé par `enemyLevel`, branché sur `rollLoot`.
+- [x] `rollLoot(rng, level)` : drops plus probables ET de plus grande valeur avec le niveau
+      (tirage biaisé `pickByValue`). Le niveau de loot = niveau ennemi + (`lootTier` du type − 1),
+      passé au hook via `lootLevel` → **`lootTier` n'est plus du code mort**.
+- [ ] Indice visuel d'élite plus marqué (taille / aura) — *optionnel, non fait*.
 
 ### Phase 5 — Équilibrage de la boucle
 - [ ] Caler `HP_GROWTH` / `DMG_GROWTH` / `LEVEL_DIST_STEP` contre la courbe de puissance joueur.

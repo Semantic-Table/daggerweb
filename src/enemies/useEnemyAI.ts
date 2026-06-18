@@ -79,6 +79,8 @@ export interface UseEnemyAIOptions {
   knockback?: { xz: number; y: number };
   /** Distance d'attaque minimale (ex: le slime ne crache pas au contact). Défaut 0. */
   minAttackDist?: number;
+  /** Niveau de loot (≈ niveau ennemi + bonus lootTier du type). Pilote rollLoot. Défaut 1. */
+  lootLevel?: number;
   /** Anime les meshes propres à l'ennemi (appelé chaque frame hors pause/mort). */
   onAnimate?: (m: EnemyMotion) => void;
   /** Reçoit l'intensité du flash (0..1) chaque frame — à appliquer au matériau. */
@@ -103,6 +105,7 @@ export function useEnemyAI(opts: UseEnemyAIOptions): EnemyAIResult {
   const kbXz = opts.knockback?.xz ?? 3;
   const kbY = opts.knockback?.y ?? 0.8;
   const minAttackDist = opts.minAttackDist ?? 0;
+  const lootLevel = opts.lootLevel ?? 1;
 
   // Callbacks de rendu stockés en ref pour toujours appeler la dernière closure
   // (capture fraîche de `looted`, etc.) sans réenregistrer le useFrame.
@@ -173,7 +176,7 @@ export function useEnemyAI(opts: UseEnemyAIOptions): EnemyAIResult {
       if (!mesh) return;
       let s = lootSeed.current;
       const rng = () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
-      const loot = rollLoot(rng);
+      const loot = rollLoot(rng, lootLevel);
       const handle: CorpseHandle = {
         mesh,
         loot,
