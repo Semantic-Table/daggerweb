@@ -3,6 +3,8 @@ import {
   CELL,
   DUNGEON_SIZE,
   DUNGEON_ENEMY_MIN_DIST,
+  DUNGEON_ENEMY_BASE,
+  DUNGEON_ENEMY_PER_LEVEL,
   DUNGEON_MAX_ENEMIES,
   LEVEL_MAX,
 } from "../config";
@@ -251,18 +253,39 @@ export function generateDungeon(seed: number, level: number = 1): DungeonData {
   }
 
   // --- 6. Ennemis : cases praticables éloignées du spawn (déterministe) ---
-  // Chaque ennemi tire un TYPE (dans le pool débloqué au niveau du donjon) et un
-  // NIVEAU autour de celui du donjon : ~60% au niveau, ~30% à ±1, ~10% élite +2.
+  // Composition par niveau (Phase 3) :
+  //  • NOMBRE croissant : clamp(round(BASE + PER_LEVEL·(niveau−1)), BASE, MAX).
+  //  • TYPE pondéré : poids = 1/(1 + niveau − débloqué). Le type le plus
+  //    récemment débloqué (le plus costaud disponible) domine, les anciens
+  //    s'estompent sans disparaître → les donjons profonds penchent vers les
+  //    ennemis durs, pas une mer de gobelins.
+  //  • NIVEAU d'ennemi autour de celui du donjon : ~60% au niveau, ~30% à ±1,
+  //    ~10% élite +2.
   const pool = floors.filter(
     ([x, z]) => Math.hypot(x - sx, z - sz) > DUNGEON_ENEMY_MIN_DIST
   );
   const unlocked = ENEMY_UNLOCKS.filter((u) => u.level <= level);
+  const weightOf = (u: { level: number }) => 1 / (1 + level - u.level);
+  const totalWeight = unlocked.reduce((s, u) => s + weightOf(u), 0);
+  const pickType = (): string => {
+    let r = rng() * totalWeight;
+    for (const u of unlocked) {
+      r -= weightOf(u);
+      if (r < 0) return u.id;
+    }
+    return unlocked[unlocked.length - 1].id;
+  };
+
   const enemies: EnemySpawn[] = [];
-  const n = Math.min(DUNGEON_MAX_ENEMIES, pool.length);
+  const count = Math.max(
+    DUNGEON_ENEMY_BASE,
+    Math.min(DUNGEON_MAX_ENEMIES, Math.round(DUNGEON_ENEMY_BASE + DUNGEON_ENEMY_PER_LEVEL * (level - 1)))
+  );
+  const n = Math.min(count, pool.length);
   for (let i = 0; i < n; i++) {
     const k = Math.floor(rng() * pool.length);
     const [x, z] = pool.splice(k, 1)[0];
-    const typeId = unlocked[Math.floor(rng() * unlocked.length)].id;
+    const typeId = pickType();
     const r = rng();
     const offset = r < 0.6 ? 0 : r < 0.9 ? (rng() < 0.5 ? -1 : 1) : 2;
     const eLevel = Math.max(1, Math.min(LEVEL_MAX, level + offset));

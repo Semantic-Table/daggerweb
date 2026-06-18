@@ -80,7 +80,12 @@ export const SKILL_SPEED_FLOOR = 0.5; // swingDur ne descend pas sous 50% du bas
 export const CELL = 4; // taille d'une cellule de donjon (unités monde)
 export const DUNGEON_SIZE = 24; // dimension de la grille du donjon (cellules)
 export const DUNGEON_ENEMY_MIN_DIST = 12; // distance min au spawn pour les ennemis
-export const DUNGEON_MAX_ENEMIES = 4;
+// Population : le nombre d'ennemis croît avec le niveau du donjon (Phase 3).
+// count = clamp(round(BASE + PER_LEVEL·(niveau−1)), BASE, MAX), borné par les
+// cases disponibles. Cf. dungeonGen.
+export const DUNGEON_ENEMY_BASE = 3;        // ennemis au niveau 1
+export const DUNGEON_ENEMY_PER_LEVEL = 0.5; // ennemis supplémentaires par niveau
+export const DUNGEON_MAX_ENEMIES = 8;       // plafond absolu
 
 // ==========================================================================
 // Niveaux (cf. docs/roadmap-niveaux.md)

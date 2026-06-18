@@ -251,9 +251,16 @@ calculée par `characterLevel()`), à confronter au niveau de donjon.
   → *Les 4 ennemis du catalogue apparaissent enfin, scalés au niveau du donjon.*
   → ⚠️ **À vérifier en jeu** : équilibrage ressenti (PV vs dégâts d'épée) et lisibilité du label au `dpr` bas.
 
-### Phase 3 — Composition par niveau
-- [ ] Mix de types par palier × biome (étendre `biomeEnemies` / `getEnemyForBiome`).
-- [ ] `DUNGEON_MAX_ENEMIES` fonction du niveau.
+### Phase 3 — Composition par niveau ✅ (biome différé)
+- [x] **Nombre** d'ennemis croissant : `clamp(round(BASE + PER_LEVEL·(niv−1)), BASE, MAX)`
+      (`DUNGEON_ENEMY_BASE`/`PER_LEVEL`/`MAX` dans `config.ts`).
+- [x] **Mix de types par palier** : tirage pondéré `1/(1 + niv − débloqué)` → le type le
+      plus récemment débloqué domine, les anciens s'estompent (donjons profonds = ennemis durs).
+- [ ] **× biome** : différé — nécessite d'abord d'assigner un biome au donjon
+      (aujourd'hui `dungeonGen` choisit wall/floor/ceiling indépendamment, sans biome
+      unifié). Quand ce sera fait, croiser le pool de types avec `getEnemyForBiome`.
+
+  → *Les donjons de haut niveau sont plus peuplés ET penchent vers les types costauds.*
 
 ### Phase 4 — Feedback & loot
 - [x] Niveau affiché dans le Grimoire / la carte (fait en Phase 1).
