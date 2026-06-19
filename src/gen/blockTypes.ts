@@ -77,74 +77,74 @@ export interface BlockAppearance {
 // -----------------------------------------------------------------------------
 
 export const WALL_TYPES: Record<WallBlockType, BlockAppearance> = {
-  // Pierre standard - Base neutre
+  // Pierre standard - donjon neutre
   stone: {
-    color: "#6b6b6b",
-    secondaryColor: "#5a5a5a",
-    roughness: 0.85,
+    color: "#7a7673",
+    secondaryColor: "#626060",
+    roughness: 0.88,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.1,
   },
-  
-  // Pierre fissurée - Usée par le temps
+
+  // Pierre fissurée - donjon abandonné
   stone_cracked: {
-    color: "#5a5a5a",
-    secondaryColor: "#404040",
+    color: "#5e5a57",
+    secondaryColor: "#464240",
     roughness: 0.95,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.15,
   },
-  
-  // Pierre moussue - Pour les donjons humides
+
+  // Pierre moussue - crypte humide
   stone_mossy: {
-    color: "#5a6b5a",
-    secondaryColor: "#4a5a4a",
-    roughness: 0.9,
+    color: "#566255",
+    secondaryColor: "#455045",
+    roughness: 0.92,
     metalness: 0.0,
     hasVariations: true,
-    variationIntensity: 0.12,
+    variationIntensity: 0.14,
   },
-  
-  // Brique rouge - Style forteresse
+
+  // Brique - forteresse
   brick: {
-    color: "#8b4513",
-    secondaryColor: "#a0522d",
-    roughness: 0.75,
+    color: "#a05835",
+    secondaryColor: "#7e4228",
+    roughness: 0.78,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.1,
   },
-  
-  // Brique sombre - Style ancien
+
+  // Brique sombre - forteresse ancienne
   brick_dark: {
-    color: "#654321",
-    secondaryColor: "#4e3418",
-    roughness: 0.8,
+    color: "#704030",
+    secondaryColor: "#502e20",
+    roughness: 0.82,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.08,
   },
-  
-  // Bois - Pour les donjons en bois
+
+  // Bois - donjon rustique
   wood: {
-    color: "#8b4513",
-    secondaryColor: "#654321",
-    roughness: 0.6,
+    color: "#7a5228",
+    secondaryColor: "#5e3e1e",
+    roughness: 0.65,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.15,
   },
-  
-  // Bois ancien - Grisâtre, usé
+
+  // Bois ancien - grisâtre, vermoulu
   wood_old: {
-    color: "#6b5b47",
-    secondaryColor: "#4a3d2e",
-    roughness: 0.7,
+    color: "#6a5540",
+    secondaryColor: "#4e3e2c",
+    roughness: 0.78,
     metalness: 0.0,
     hasVariations: true,
-    variationIntensity: 0.12,
+    variationIntensity: 0.13,
   },
 };
 
@@ -155,72 +155,72 @@ export const WALL_TYPES: Record<WallBlockType, BlockAppearance> = {
 export const FLOOR_TYPES: Record<FloorBlockType, BlockAppearance> = {
   // Pierre standard
   stone: {
-    color: "#5a5a5a",
-    secondaryColor: "#4a4a4a",
+    color: "#646260",
+    secondaryColor: "#504e4c",
     roughness: 0.9,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.1,
   },
-  
-  // Pierre sombre
+
+  // Pierre sombre - cryptes profondes
   stone_dark: {
-    color: "#3a3a3a",
-    secondaryColor: "#2a2a2a",
+    color: "#3c3a38",
+    secondaryColor: "#2c2a28",
     roughness: 0.95,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.1,
   },
-  
+
   // Pierre fissurée
   stone_cracked: {
-    color: "#4a4a4a",
-    secondaryColor: "#333333",
+    color: "#525050",
+    secondaryColor: "#3c3a38",
     roughness: 0.95,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.15,
   },
-  
-  // Terre
+
+  // Terre - grottes
   dirt: {
-    color: "#5d4037",
-    secondaryColor: "#4e342e",
+    color: "#7a5040",
+    secondaryColor: "#5e3c2e",
     roughness: 1.0,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.2,
   },
-  
-  // Terre sombre
+
+  // Terre sombre - grottes profondes
   dirt_dark: {
-    color: "#3e2723",
-    secondaryColor: "#2e1b17",
+    color: "#46302a",
+    secondaryColor: "#32201a",
     roughness: 1.0,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.15,
   },
-  
-  // Dalles de pierre
+
+  // Dalles - forteresse
   tiles: {
-    color: "#7a7a7a",
-    secondaryColor: "#6a6a6a",
-    roughness: 0.7,
+    color: "#8e8a80",
+    secondaryColor: "#767270",
+    roughness: 0.68,
     metalness: 0.05,
     hasVariations: true,
     variationIntensity: 0.08,
   },
-  
-  // Dalles cassées
+
+  // Dalles cassées - forteresse endommagée
   tiles_broken: {
-    color: "#6a6a6a",
-    secondaryColor: "#505050",
+    color: "#706e6a",
+    secondaryColor: "#565452",
     roughness: 0.9,
     metalness: 0.0,
     hasVariations: true,
-    variationIntensity: 0.12,
+    variationIntensity: 0.13,
   },
 };
 
@@ -231,45 +231,45 @@ export const FLOOR_TYPES: Record<FloorBlockType, BlockAppearance> = {
 export const CEILING_TYPES: Record<CeilingBlockType, BlockAppearance> = {
   // Pierre standard
   stone: {
-    color: "#4a4a4a",
-    secondaryColor: "#3a3a3a",
+    color: "#484644",
+    secondaryColor: "#383634",
     roughness: 0.9,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.1,
   },
-  
-  // Pierre sombre
+
+  // Pierre sombre - cryptes
   stone_dark: {
-    color: "#2a2a2a",
-    secondaryColor: "#1a1a1a",
+    color: "#282624",
+    secondaryColor: "#1a1816",
     roughness: 0.95,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.08,
   },
-  
-  // Bois
+
+  // Bois - forteresses
   wood: {
-    color: "#5d4037",
-    secondaryColor: "#4e342e",
-    roughness: 0.6,
+    color: "#5e3a1c",
+    secondaryColor: "#4a2c14",
+    roughness: 0.65,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.15,
   },
-  
+
   // Bois sombre
   wood_dark: {
-    color: "#4e342e",
-    secondaryColor: "#3e2723",
-    roughness: 0.7,
+    color: "#3e2410",
+    secondaryColor: "#2e180a",
+    roughness: 0.72,
     metalness: 0.0,
     hasVariations: true,
     variationIntensity: 0.12,
   },
-  
-  // Pas de plafond (pour les zones ouvertes)
+
+  // Pas de plafond (zones ouvertes)
   none: {
     color: "#000000",
     roughness: 1.0,
@@ -480,6 +480,25 @@ export const BIOME_PRESETS: Record<string, BiomeBlockPreset> = {
   },
 };
 
+// -----------------------------------------------------------------------------
+// Éclairage par biome — fog + lumière ambiante
+// -----------------------------------------------------------------------------
+
+export interface BiomeLighting {
+  fogColor: string;
+  fogNear: number;
+  fogFar: number;
+  ambientColor: string;
+  ambientIntensity: number;
+}
+
+export const BIOME_LIGHTING: Record<string, BiomeLighting> = {
+  default: { fogColor: "#07070a", fogNear: 4, fogFar: 30, ambientColor: "#5a586c", ambientIntensity: 1.1 },
+  keep:    { fogColor: "#0e0a04", fogNear: 4, fogFar: 32, ambientColor: "#7c6840", ambientIntensity: 1.0 },
+  crypt:   { fogColor: "#040508", fogNear: 3, fogFar: 25, ambientColor: "#3a3852", ambientIntensity: 0.9 },
+  cave:    { fogColor: "#070604", fogNear: 3, fogFar: 22, ambientColor: "#4a3c30", ambientIntensity: 0.85 },
+};
+
 /** Sélectionner un type de bloc pour un biome donné */
 export function getBlockTypeForBiome(
   biome: string,
@@ -488,12 +507,12 @@ export function getBlockTypeForBiome(
   index: number
 ): WallBlockType | FloorBlockType | CeilingBlockType {
   const preset = BIOME_PRESETS[biome] || BIOME_PRESETS.default;
-  const hash = (seed: number, idx: number) => {
-    let h = seed * 37 + idx * 23;
+  const hash = (s: number, idx: number) => {
+    let h = s * 37 + idx * 23;
     h = ((h << 5) - h) + (h << 3);
-    return Math.abs(h);
+    return Math.abs(h) % 10000;
   };
-  
+
   const r = hash(seed, index) / 10000;
   
   if (category === "wall") {

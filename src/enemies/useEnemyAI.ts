@@ -8,6 +8,7 @@ import { damagePlayer } from "../combat/playerCombat";
 import { corpseRegistry, type CorpseHandle } from "../combat/corpseRegistry";
 import { gameState } from "../combat/gameState";
 import { rollLoot } from "../items/itemDefs";
+import { pushDmg } from "../combat/damageNumbers";
 
 // ============================================================================
 // useEnemyAI — moteur d'IA/combat partagé par TOUS les ennemis.
@@ -98,6 +99,8 @@ export interface EnemyAIResult {
   looted: boolean;
   /** Vrai dès la mort (réactif) — ex: masquer le label flottant. */
   isDead: boolean;
+  /** Fraction de vie restante (0-1), mise à jour en réactif à chaque coup. */
+  hpFraction: number;
 }
 
 export function useEnemyAI(opts: UseEnemyAIOptions): EnemyAIResult {
@@ -127,6 +130,7 @@ export function useEnemyAI(opts: UseEnemyAIOptions): EnemyAIResult {
   const attackAnim = useRef(0);
   const [looted, setLooted] = useState(false);
   const [isDead, setIsDead] = useState(false);
+  const [hpFraction, setHpFraction] = useState(1.0);
   const tmp = useMemo(() => new THREE.Vector3(), []);
 
   // Coups en attente : `hit` (appelé depuis un event DOM par l'épée) n'altère
@@ -213,6 +217,9 @@ export function useEnemyAI(opts: UseEnemyAIOptions): EnemyAIResult {
       const h = pendingHits.current.shift()!;
       hp.current -= h.dmg;
       flash.current = 1;
+      const t2 = b.translation();
+      pushDmg(t2.x, t2.y + 1.4, t2.z, Math.max(1, Math.round(h.dmg)));
+      setHpFraction(Math.max(0, hp.current / stats.hp));
       b.applyImpulse({ x: h.dx * kbXz, y: kbY, z: h.dz * kbXz }, true);
       if (hp.current <= 0) die();
     }
@@ -276,5 +283,5 @@ export function useEnemyAI(opts: UseEnemyAIOptions): EnemyAIResult {
     onAnimate.current?.({ ws, aa, dist: d, phase: walkPhase.current, dt });
   });
 
-  return { looted, isDead };
+  return { looted, isDead, hpFraction };
 }

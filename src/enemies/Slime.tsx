@@ -157,7 +157,7 @@ export function Slime({ spawn, index, level, elite }: EnemyProps) {
   };
 
   const stats = useMemo(() => scaledStats(slimeType, level), [level]);
-  const { looted, isDead } = useEnemyAI({
+  const { looted, isDead, hpFraction } = useEnemyAI({
     spawn,
     index,
     body,
@@ -294,7 +294,7 @@ export function Slime({ spawn, index, level, elite }: EnemyProps) {
             />
           </mesh>
         </group>
-        {!isDead && <EnemyLabel name={slimeType.name} level={level} elite={elite} y={slimeType.height} />}
+        {!isDead && <EnemyLabel name={slimeType.name} level={level} elite={elite} y={slimeType.height} hpFraction={hpFraction} />}
       </RigidBody>
 
       {/* Projectiles d'acide */}

@@ -32,7 +32,7 @@ export function Enemy({ spawn, index, level, elite }: EnemyProps) {
   }, [spawn]);
 
   const stats = useMemo(() => scaledStats(goblinType, level), [level]);
-  const { looted, isDead } = useEnemyAI({
+  const { looted, isDead, hpFraction } = useEnemyAI({
     spawn,
     index,
     body,
@@ -135,7 +135,7 @@ export function Enemy({ spawn, index, level, elite }: EnemyProps) {
           </mesh>
         </group>
       </group>
-      {!isDead && <EnemyLabel name={goblinType.name} level={level} elite={elite} y={goblinType.height} />}
+      {!isDead && <EnemyLabel name={goblinType.name} level={level} elite={elite} y={goblinType.height} hpFraction={hpFraction} />}
     </RigidBody>
   );
 }

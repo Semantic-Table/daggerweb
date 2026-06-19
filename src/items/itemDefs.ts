@@ -1,6 +1,6 @@
 import type { WeaponCategory } from "../combat/skills";
 
-export type ItemKind = "weapon" | "potion" | "armor";
+export type ItemKind = "weapon" | "potion" | "armor" | "gatherable";
 
 export type ArmorSlot = "head" | "chest" | "legs" | "gloves" | "feet" | "shield" | "cloak";
 
@@ -56,7 +56,13 @@ export interface ArmorDef extends ItemMeta {
   armorClass: ArmorClass;
 }
 
-export type ItemDef = WeaponDef | PotionDef | ArmorDef;
+export interface GatherableDef extends ItemMeta {
+  kind: "gatherable";
+  id: string;
+  name: string;
+}
+
+export type ItemDef = WeaponDef | PotionDef | ArmorDef | GatherableDef;
 
 export const ITEMS: Record<string, ItemDef> = {
   fists: {
@@ -162,6 +168,28 @@ export const ITEMS: Record<string, ItemDef> = {
     kind: "armor", id: "tower_shield", name: "Bouclier tour", slot: "shield",
     armor: 3, armorClass: "heavy",
     weight: 8, value: 120, desc: "Grand bouclier rectangulaire. Bloque presque tout.",
+  },
+  // ==========================================================================
+  // Gatherables — plantes & ressources de l'overworld
+  // ==========================================================================
+  flower_wildrose: {
+    kind: "gatherable", id: "flower_wildrose", name: "Wildrose",
+    weight: 0.1, value: 8, desc: "Pétale rouge vif. Sent le sang séché et la forêt profonde.",
+  },
+  flower_sunbloom: {
+    kind: "gatherable", id: "flower_sunbloom", name: "Sunbloom",
+    weight: 0.1, value: 6, desc: "Fleur dorée qui s'épanouit à l'ombre. Rare en plaine.",
+  },
+  // ==========================================================================
+  // Contenants — fioles
+  // ==========================================================================
+  water_empty: {
+    kind: "gatherable", id: "water_empty", name: "Fiole vide",
+    weight: 0.3, value: 2, desc: "Flacon de verre soufflé. Peut contenir un liquide.",
+  },
+  water_full: {
+    kind: "gatherable", id: "water_full", name: "Fiole d'eau",
+    weight: 0.5, value: 5, desc: "Eau claire tirée d'un vieux puits. Fraîche, sans odeur.",
   },
 };
 

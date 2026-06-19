@@ -12,9 +12,7 @@ import {
   WallBlockType,
   FloorBlockType,
   CeilingBlockType,
-  getRandomWallType,
-  getRandomFloorType,
-  getRandomCeilingType,
+  getBlockTypeForBiome,
 } from "./blockTypes";
 
 // Génération block-based (cf. GDD §4), version DONNÉES PURES : aucune dépendance
@@ -35,6 +33,29 @@ export interface WallPanel {
   x: number;
   z: number;
   rot: number; // 0 = mur orienté E/O (s'étend sur X), PI/2 = mur orienté N/S (s'étend sur Z)
+}
+
+// Torche murale : position + normale inward (direction vers le sol)
+export interface WallTorch {
+  x: number;
+  z: number;
+  nx: number; // normale inward X
+  nz: number; // normale inward Z
+}
+
+// Spawn d'un coffre (positionné contre un mur, orienté vers la salle)
+export interface ChestSpawn {
+  x: number;
+  z: number;
+  nx: number; // normale inward (mur → salle) — direction vers laquelle le coffre fait face
+  nz: number;
+}
+
+// Spawn d'une porte (bloque le passage, ouvrable à la main)
+export interface DoorSpawn {
+  x: number;
+  z: number;
+  rot: number; // 0 = bloque N/S, PI/2 = bloque E/W
 }
 
 // Un spawn d'ennemi : position + type (id catalogue) + niveau (≈ niveau du donjon ±).
@@ -65,11 +86,17 @@ export interface DungeonData {
   exitRot: number; // orientation du seuil (Y)
   size: number; // dimension de la grille (en cellules)
   seed: number;
-  level: number; // niveau de difficulté, hérité de l'entrée (cf. roadmap-niveaux)
+  level: number; // niveau de difficulté, hérité de l'entrée
+  biome: string; // preset de biome (default / keep / crypt / cave)
   // Types de blocs pour ce donjon (un seul par catégorie)
   wallType: WallBlockType;
   floorType: FloorBlockType;
   ceilingType: CeilingBlockType;
+  // Décors procéduraux
+  wallTorches: WallTorch[];
+  chests: ChestSpawn[];
+  doors: DoorSpawn[];
+  pillars: [number, number][]; // positions monde des colonnes
 }
 
 // ============================================================================
@@ -154,10 +181,14 @@ function carveCorridor(g: Grid, ax: number, ay: number, bx: number, by: number, 
 export function generateDungeon(seed: number, level: number = 1): DungeonData {
   const rng = makeRng(seed);
 
-  // Un type de bloc par catégorie pour ce donjon (déterministe)
-  const wallType = getRandomWallType(seed, 0);
-  const floorType = getRandomFloorType(seed, 1);
-  const ceilingType = getRandomCeilingType(seed, 2);
+  // Biome : déterministe par seed
+  const BIOMES = ["default", "keep", "crypt", "cave"];
+  const biome = BIOMES[Math.floor(rng() * BIOMES.length)];
+
+  // Types de blocs sélectionnés depuis le preset du biome
+  const wallType = getBlockTypeForBiome(biome, "wall", seed, 0) as WallBlockType;
+  const floorType = getBlockTypeForBiome(biome, "floor", seed, 1) as FloorBlockType;
+  const ceilingType = getBlockTypeForBiome(biome, "ceiling", seed, 2) as CeilingBlockType;
 
   const size = DUNGEON_SIZE;
   const g: Grid = { size, floor: new Uint8Array(size * size) };
@@ -203,15 +234,19 @@ export function generateDungeon(seed: number, level: number = 1): DungeonData {
 
   const floors: [number, number][] = [];
   const panels: WallPanel[] = [];
+  const wallTorches: WallTorch[] = [];
+  const MAX_TORCHES = 8;
 
   // Côtés : un mur dès qu'une cellule de sol borde le vide.
+  // nx/nz = normale inward (direction mur → sol)
   const dirs = [
-    { dx: 0, dy: -1, rot: 0, ox: 0, oz: -CELL / 2 }, // Nord
-    { dx: 0, dy: 1, rot: 0, ox: 0, oz: CELL / 2 }, // Sud
-    { dx: -1, dy: 0, rot: Math.PI / 2, ox: -CELL / 2, oz: 0 }, // Ouest
-    { dx: 1, dy: 0, rot: Math.PI / 2, ox: CELL / 2, oz: 0 }, // Est
+    { dx: 0, dy: -1, rot: 0,            ox: 0,         oz: -CELL / 2, nx: 0,  nz: 1  }, // Nord
+    { dx: 0, dy: 1,  rot: 0,            ox: 0,         oz:  CELL / 2, nx: 0,  nz: -1 }, // Sud
+    { dx: -1, dy: 0, rot: Math.PI / 2,  ox: -CELL / 2, oz: 0,         nx: 1,  nz: 0  }, // Ouest
+    { dx: 1,  dy: 0, rot: Math.PI / 2,  ox:  CELL / 2, oz: 0,         nx: -1, nz: 0  }, // Est
   ];
 
+  let panelIdx = 0;
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       if (g.floor[idx(g, x, y)] !== 1) continue;
@@ -219,7 +254,13 @@ export function generateDungeon(seed: number, level: number = 1): DungeonData {
       floors.push([wx, wz]);
       for (const d of dirs) {
         if (isFloor(g, x + d.dx, y + d.dy)) continue;
-        panels.push({ x: wx + d.ox, z: wz + d.oz, rot: d.rot });
+        const px = wx + d.ox, pz = wz + d.oz;
+        panels.push({ x: px, z: pz, rot: d.rot });
+        // Torche tous les ~12 panneaux, espacées
+        if (panelIdx % 12 === 5 && wallTorches.length < MAX_TORCHES) {
+          wallTorches.push({ x: px, z: pz, nx: d.nx, nz: d.nz });
+        }
+        panelIdx++;
       }
     }
   }
@@ -260,6 +301,98 @@ export function generateDungeon(seed: number, level: number = 1): DungeonData {
     break exitSearch;
   }
 
+  // --- 6a. Piliers : coins intérieurs des grandes salles (w≥4 ET h≥4) ---
+  const pillars: [number, number][] = [];
+  for (const room of rooms) {
+    if (room.w < 4 || room.h < 4) continue;
+    const corners: [number, number][] = [
+      [room.x + 1, room.y + 1],
+      [room.x + room.w - 2, room.y + 1],
+      [room.x + 1, room.y + room.h - 2],
+      [room.x + room.w - 2, room.y + room.h - 2],
+    ];
+    for (const [cx, cy] of corners) {
+      if (isFloor(g, cx, cy)) {
+        const [px, pz] = toWorld(cx, cy);
+        pillars.push([px, pz]);
+      }
+    }
+  }
+
+  // --- 6b. Coffres : contre les murs des salles les plus isolées ---
+  // Directions mur (même logique que les panels mais avec normale inward)
+  const wallDirs4 = [
+    { dx: 0, dy: -1, nx: 0, nz: 1  }, // mur Nord  → coffre face Sud
+    { dx: 0, dy:  1, nx: 0, nz: -1 }, // mur Sud   → coffre face Nord
+    { dx: -1, dy: 0, nx: 1, nz: 0  }, // mur Ouest → coffre face Est
+    { dx:  1, dy: 0, nx: -1, nz: 0 }, // mur Est   → coffre face Ouest
+  ];
+
+  const sortedRooms = [...rooms]
+    .map((r) => {
+      const [cx, cy] = rectCenter(r);
+      const [wx, wz] = toWorld(cx, cy);
+      return { r, dist: Math.hypot(wx - sx, wz - sz) };
+    })
+    .sort((a, b) => b.dist - a.dist);
+
+  const MAX_CHESTS = Math.min(4, Math.max(1, Math.floor(rooms.length / 3)));
+  const chests: ChestSpawn[] = [];
+
+  for (let i = 0; i < sortedRooms.length && chests.length < MAX_CHESTS; i++) {
+    if (i !== 0 && rng() >= 0.5) continue;
+    const { r } = sortedRooms[i];
+
+    // Trouver toutes les cellules du bord de la salle adjacentes à un mur
+    const candidates: { gx: number; gy: number; nx: number; nz: number }[] = [];
+    for (let gy = r.y; gy < r.y + r.h; gy++) {
+      for (let gx = r.x; gx < r.x + r.w; gx++) {
+        if (!isFloor(g, gx, gy)) continue;
+        for (const wd of wallDirs4) {
+          if (!isFloor(g, gx + wd.dx, gy + wd.dy)) {
+            candidates.push({ gx, gy, nx: wd.nx, nz: wd.nz });
+            break; // une direction de mur par cellule suffit
+          }
+        }
+      }
+    }
+    if (candidates.length === 0) continue;
+    const pick = candidates[Math.floor(rng() * candidates.length)];
+    const [wx, wz] = toWorld(pick.gx, pick.gy);
+    chests.push({ x: wx, z: wz, nx: pick.nx, nz: pick.nz });
+  }
+
+  // --- 6c. Portes : segments de couloir droits (pas trop près du spawn) ---
+  const doors: DoorSpawn[] = [];
+  const MAX_DOORS = 4;
+  const MIN_DOOR_DIST_SQ = (CELL * 4) * (CELL * 4); // espacement min entre portes
+  const MIN_SPAWN_DIST = DUNGEON_ENEMY_MIN_DIST / 2;
+
+  for (let gy = 1; gy < size - 1 && doors.length < MAX_DOORS; gy++) {
+    for (let gx = 1; gx < size - 1 && doors.length < MAX_DOORS; gx++) {
+      if (!isFloor(g, gx, gy)) continue;
+      const [wx, wz] = toWorld(gx, gy);
+      if (Math.hypot(wx - sx, wz - sz) < MIN_SPAWN_DIST) continue;
+
+      const nsFloor = isFloor(g, gx, gy - 1) && isFloor(g, gx, gy + 1);
+      const nsWall  = !isFloor(g, gx - 1, gy) && !isFloor(g, gx + 1, gy);
+      const ewFloor = isFloor(g, gx - 1, gy) && isFloor(g, gx + 1, gy);
+      const ewWall  = !isFloor(g, gx, gy - 1) && !isFloor(g, gx, gy + 1);
+
+      let doorRot: number | null = null;
+      if (nsFloor && nsWall) doorRot = 0;
+      else if (ewFloor && ewWall) doorRot = Math.PI / 2;
+      if (doorRot === null) continue;
+
+      // Éviter les portes trop proches les unes des autres
+      const tooClose = doors.some(
+        (d) => (d.x - wx) * (d.x - wx) + (d.z - wz) * (d.z - wz) < MIN_DOOR_DIST_SQ
+      );
+      if (tooClose) continue;
+      if (rng() < 0.28) doors.push({ x: wx, z: wz, rot: doorRot });
+    }
+  }
+
   // --- 6. Ennemis : cases praticables éloignées du spawn (déterministe) ---
   // Composition par niveau (Phase 3) :
   //  • NOMBRE croissant : clamp(round(BASE + PER_LEVEL·(niveau−1)), BASE, MAX).
@@ -269,8 +402,14 @@ export function generateDungeon(seed: number, level: number = 1): DungeonData {
   //    ennemis durs, pas une mer de gobelins.
   //  • NIVEAU d'ennemi autour de celui du donjon : ~60% au niveau, ~30% à ±1,
   //    ~10% élite +2.
+  const blockedPositions = new Set<string>([
+    ...pillars.map(([px, pz]) => `${px},${pz}`),
+    ...chests.map((c) => `${c.x},${c.z}`),
+  ]);
   const pool = floors.filter(
-    ([x, z]) => Math.hypot(x - sx, z - sz) > DUNGEON_ENEMY_MIN_DIST
+    ([x, z]) =>
+      Math.hypot(x - sx, z - sz) > DUNGEON_ENEMY_MIN_DIST &&
+      !blockedPositions.has(`${x},${z}`)
   );
   const unlocked = ENEMY_UNLOCKS.filter((u) => u.level <= level);
   const weightOf = (u: { level: number }) => 1 / (1 + level - u.level);
@@ -310,8 +449,13 @@ export function generateDungeon(seed: number, level: number = 1): DungeonData {
     size,
     seed,
     level,
+    biome,
     wallType,
     floorType,
     ceilingType,
+    wallTorches,
+    chests,
+    doors,
+    pillars,
   };
 }

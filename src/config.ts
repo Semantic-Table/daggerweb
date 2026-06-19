@@ -80,6 +80,15 @@ export const SKILL_DMG_PER_LEVEL = 0.06; // +6% dégâts par palier (multiplicat
 export const SKILL_SPEED_PER_LEVEL = 0.04; // -4% swingDur par palier (plus rapide)
 export const SKILL_SPEED_FLOOR = 0.5; // swingDur ne descend pas sous 50% du base
 
+// ============================================================================
+// Compétences de mouvement (Saut, Athlétisme)
+// ============================================================================
+
+export const JUMP_FORCE = 9.5;                    // impulsion verticale de base
+export const JUMP_BONUS_PER_LEVEL = 0.08;         // +8% hauteur de saut par palier
+export const ATHLETICS_SPEED_PER_LEVEL = 0.025;   // +2.5% vitesse de sprint par palier
+export const ATHLETICS_STAMINA_PER_LEVEL = 0.035; // -3.5% coût endurance/s par palier
+
 // Génération de donjon
 export const CELL = 4; // taille d'une cellule de donjon (unités monde)
 export const DUNGEON_SIZE = 24; // dimension de la grille du donjon (cellules)

@@ -13,7 +13,8 @@ import {
   encumbranceMult,
 } from "../combat/character";
 import { getTotalWeight } from "../combat/inventory";
-import { PLAYER_WALK, PLAYER_RUN, PLAYER_EYE, RUN_STAMINA_COST } from "../config";
+import { gainMovementXp, movementBonus } from "../combat/skills";
+import { PLAYER_WALK, PLAYER_RUN, PLAYER_EYE, RUN_STAMINA_COST, JUMP_FORCE } from "../config";
 
 // Joueur FPS : capsule DYNAMIQUE pilotée par Rapier (gravité + collisions réelles).
 // On lit les touches, on impose la vitesse horizontale, et la caméra suit le corps.
@@ -26,6 +27,8 @@ export function Player({ spawn }: { spawn: [number, number, number] }) {
   const fwd = useRef(new THREE.Vector3()).current;
   const right = useRef(new THREE.Vector3()).current;
   const dir = useRef(new THREE.Vector3()).current;
+  const bobPhase = useRef(0);
+  const wasJumpDown = useRef(false);
 
   useFrame((_, dt) => {
     const b = body.current;
@@ -45,15 +48,21 @@ export function Player({ spawn }: { spawn: [number, number, number] }) {
     regenStamina(dt);
 
     // 2. Coût de la course (si on court ET qu'on a assez de vigueur)
-    const { forward, back, left, right: rk, run } = get();
+    const { forward, back, left, right: rk, run, jump } = get() as { forward: boolean; back: boolean; left: boolean; right: boolean; run: boolean; jump: boolean };
     const isMoving = forward || back || left || rk;
     
+    // Bonus athlétisme (compétences de mouvement)
+    const athlBonus = movementBonus("athletics");
+    const jumpBonus = movementBonus("jumping");
+
     // En courant : coût de vigueur par frame (fraction de jauge, ∝ temps écoulé)
+    const runCost = RUN_STAMINA_COST * athlBonus.staminaMult;
     if (run && isMoving && canRun()) {
-      if (!useStamina(RUN_STAMINA_COST * dt)) {
+      if (!useStamina(runCost * dt)) {
         // Plus assez de vigueur pour courir
         return;
       }
+      gainMovementXp("athletics", dt * 1.5);
     }
 
     // ========================================================================
@@ -69,19 +78,42 @@ export function Player({ spawn }: { spawn: [number, number, number] }) {
     dir.set(0, 0, 0).addScaledVector(right, wx).addScaledVector(fwd, wz);
     if (dir.lengthSq() > 0) dir.normalize();
 
-    // Vitesse de base modifiée par l'attribut VIT
-    const baseSpeed = run && canRun() ? PLAYER_RUN : PLAYER_WALK;
-    
+    // Vitesse de base modifiée par l'attribut VIT + compétence athlétisme
+    const runSpeed = PLAYER_RUN * athlBonus.speedMult;
+    const baseSpeed = run && canRun() ? runSpeed : PLAYER_WALK;
+
     // Malus d'encombrement si trop chargé
     const currentWeight = getTotalWeight();
     const encumbrance = encumbranceMult(currentWeight);
-    
+
     const speed = baseSpeed * moveMult() * encumbrance;
     const v = b.linvel();
-    b.setLinvel({ x: dir.x * speed, y: v.y, z: dir.z * speed }, true);
+
+    // ========================================================================
+    // Saut
+    // ========================================================================
+    const isGrounded = Math.abs(v.y) < 0.55;
+    let vy = v.y;
+    if (jump && !wasJumpDown.current && isGrounded) {
+      vy = JUMP_FORCE * jumpBonus.jumpMult;
+      gainMovementXp("jumping", 1);
+    }
+    wasJumpDown.current = jump;
+
+    b.setLinvel({ x: dir.x * speed, y: vy, z: dir.z * speed }, true);
 
     const t = b.translation();
-    camera.position.set(t.x, t.y + PLAYER_EYE, t.z);
+
+    // ========================================================================
+    // View bobbing
+    // ========================================================================
+    const horizSq = dir.x * dir.x + dir.z * dir.z;
+    if (isGrounded && horizSq > 0.01) {
+      bobPhase.current += dt * speed * 1.8;
+    }
+    const bob = isGrounded ? Math.sin(bobPhase.current) * 0.034 : 0;
+
+    camera.position.set(t.x, t.y + PLAYER_EYE + bob, t.z);
     playerPos.copy(camera.position);
   });
 

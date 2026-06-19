@@ -9,7 +9,7 @@ export const GROUND = 200;
 export type EntranceKind = "keep" | "crypt" | "cave";
 
 export interface Decor {
-  type: "rock" | "tree";
+  type: "rock" | "tree" | "foliage" | "flower_a" | "flower_b" | "well";
   x: number;
   z: number;
   rotY: number;
@@ -53,6 +53,33 @@ export function generateOverworld(seed: number): OverworldData {
       decor.push({ type: "rock", x, z, rotY: rng() * Math.PI * 2, scaleY: 0.6 + rng() * 0.5, radius: s, height: 0 });
     }
   }
+
+  // Feuillage (buissons décoratifs, non-interactables)
+  for (let i = 0; i < 35; i++) {
+    const x = (rng() - 0.5) * GROUND * 0.9;
+    const z = (rng() - 0.5) * GROUND * 0.9;
+    if (Math.hypot(x, z) < 8) continue;
+    decor.push({ type: "foliage", x, z, rotY: rng() * Math.PI * 2, scaleY: 0.7 + rng() * 0.7, radius: 0.4, height: 0.8 });
+  }
+
+  // Fleurs A (wildrose, rouge)
+  for (let i = 0; i < 14; i++) {
+    const x = (rng() - 0.5) * GROUND * 0.9;
+    const z = (rng() - 0.5) * GROUND * 0.9;
+    if (Math.hypot(x, z) < 8) continue;
+    decor.push({ type: "flower_a", x, z, rotY: rng() * Math.PI * 2, scaleY: 1, radius: 0.15, height: 0.5 });
+  }
+
+  // Fleurs B (sunbloom, jaune)
+  for (let i = 0; i < 14; i++) {
+    const x = (rng() - 0.5) * GROUND * 0.9;
+    const z = (rng() - 0.5) * GROUND * 0.9;
+    if (Math.hypot(x, z) < 8) continue;
+    decor.push({ type: "flower_b", x, z, rotY: rng() * Math.PI * 2, scaleY: 1, radius: 0.15, height: 0.5 });
+  }
+
+  // Puits (unique, visible depuis le spawn)
+  decor.push({ type: "well", x: 12, z: -8, rotY: 0, scaleY: 1, radius: 0.68, height: 1.1 });
 
   const entrances: Entrance[] = [];
   const count = 4;

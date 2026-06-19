@@ -59,7 +59,7 @@ export function Skeleton({ spawn, index, level, elite }: EnemyProps) {
   }, [boneColor]);
   
   const stats = useMemo(() => scaledStats(skeletonType, level), [level]);
-  const { looted, isDead } = useEnemyAI({
+  const { looted, isDead, hpFraction } = useEnemyAI({
     spawn,
     index,
     body,
@@ -239,7 +239,7 @@ export function Skeleton({ spawn, index, level, elite }: EnemyProps) {
           )}
         </group>
       </group>
-      {!isDead && <EnemyLabel name={skeletonType.name} level={level} elite={elite} y={skeletonType.height} />}
+      {!isDead && <EnemyLabel name={skeletonType.name} level={level} elite={elite} y={skeletonType.height} hpFraction={hpFraction} />}
     </RigidBody>
   );
 }

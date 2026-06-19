@@ -7,6 +7,7 @@ import { generateDungeon } from "./gen/dungeonGen";
 import { generateDungeonName } from "./gen/dungeonNames";
 import { Overworld } from "./components/Overworld";
 import { Dungeon } from "./components/Dungeon";
+import { Door } from "./components/Door";
 import { ExitPortal } from "./components/ExitPortal";
 import { Player } from "./components/Player";
 import { Torch } from "./components/Torch";
@@ -14,15 +15,20 @@ import { Interaction } from "./components/Interaction";
 import { Sword } from "./components/Sword";
 import { Enemies } from "./components/Enemies";
 import { GrimoireUI } from "./components/GrimoireUI";
+import { DamageNumbers } from "./components/DamageNumbers";
 import { setDamageHandler } from "./combat/playerCombat";
-import { getInventory, subscribeInventory, getArmorClass, pickupItem } from "./combat/inventory";
+import { getInventory, subscribeInventory, getArmorClass, pickupItem, removeItem } from "./combat/inventory";
 import { getSkills, subscribeSkills, levelInfo, skillBonus, CATEGORY_LABEL } from "./combat/skills";
 import { gameState } from "./combat/gameState";
 import { maxHp, staminaPercent, subscribeCharacter, setOnAttrLevelUp, ATTR_LABEL } from "./combat/character";
 import type { Attr } from "./combat/character";
 import type { CorpseHandle } from "./combat/corpseRegistry";
+import type { ChestHandle } from "./combat/chestRegistry";
+import type { GatherableHandle } from "./combat/gatherableRegistry";
 import { PLAYER_IFRAMES_MS } from "./config";
 import { ITEMS } from "./items/itemDefs";
+import { BIOME_LIGHTING, getWallAppearance } from "./gen/blockTypes";
+import type { WallBlockType } from "./gen/blockTypes";
 
 const OVERWORLD_SEED = 1337;
 
@@ -33,6 +39,7 @@ const KEYMAP = [
   { name: "left", keys: ["KeyA", "KeyQ", "ArrowLeft"] },
   { name: "right", keys: ["KeyD", "ArrowRight"] },
   { name: "run", keys: ["ShiftLeft", "ShiftRight"] },
+  { name: "jump", keys: ["Space"] },
 ];
 
 export function App() {
@@ -49,9 +56,12 @@ export function App() {
   const [hurt, setHurt] = useState(false);
   const [invOpen, setInvOpen] = useState(false);
   const [lootCorpse, setLootCorpse] = useState<CorpseHandle | null>(null);
+  const [lootChest, setLootChest] = useState<ChestHandle | null>(null);
   // Feedback pour les coups critiques
   const [crit, setCrit] = useState(false);
   const critTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [notification, setNotification] = useState<string | null>(null);
+  const notifTimer = useRef<ReturnType<typeof setTimeout>>();
   // Feedback pour les montées d'attribut
   const [attrUp, setAttrUp] = useState<Attr | null>(null);
   const attrUpTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -75,6 +85,7 @@ export function App() {
       ITEMS.iron_helmet,
     ];
     starterArmor.forEach((armor) => pickupItem(armor));
+    pickupItem(ITEMS.water_empty);
   }, []);
   
   // HUD compétences : on relit les registres (inventaire + skills) à la volée et
@@ -211,11 +222,40 @@ export function App() {
     setInvOpen(true);
     document.exitPointerLock();
   }, []);
+  const onGather = useCallback((handle: GatherableHandle) => {
+    const picked = pickupItem(handle.item);
+    if (picked) {
+      handle.markGathered();
+      setNotification(`${handle.item.name} ramassé·e.`);
+    } else {
+      setNotification("Inventaire trop lourd.");
+    }
+    clearTimeout(notifTimer.current);
+    notifTimer.current = setTimeout(() => setNotification(null), 2200);
+  }, []);
+  const onChest = useCallback((handle: ChestHandle) => {
+    handle.markOpened();
+    setLootChest(handle);
+    setInvOpen(true);
+    document.exitPointerLock();
+  }, []);
+
+  const onWell = useCallback(() => {
+    const inv = getInventory();
+    const idx = inv.items.findIndex((it) => it.id === "water_empty");
+    if (idx === -1) {
+      setNotification("Il vous faut une fiole vide.");
+      clearTimeout(notifTimer.current);
+      notifTimer.current = setTimeout(() => setNotification(null), 2200);
+      return;
+    }
+    removeItem(idx);
+    pickupItem(ITEMS.water_full);
+  }, []);
   const closeInv = useCallback(() => {
     setInvOpen(false);
     setLootCorpse(null);
-    // Petit délai pour laisser le temps à PointerLockControls de repasser enabled
-    // avant de demander le lock — sinon le navigateur ignore la requête.
+    setLootChest(null);
     setTimeout(() => controls.current?.lock(), 50);
   }, []);
   // Pause partagée : l'IA ennemie (useFrame) la lit pour se figer menu ouvert.
@@ -260,10 +300,28 @@ export function App() {
           camera.rotation.y = Math.PI; // Regarde vers +z (Nord)
         }}
       >
-        <color attach="background" args={[mode === "dungeon" ? "#07070a" : "#141118"]} />
-        <fog attach="fog" args={mode === "dungeon" ? ["#07070a", 4, 30] : ["#141118", 20, 120]} />
+        {(() => {
+          const bl = dungeon?.biome ? (BIOME_LIGHTING[dungeon.biome] ?? BIOME_LIGHTING.default) : null;
+          const fogColor = mode === "dungeon" && bl ? bl.fogColor : "#141118";
+          const fogNear  = mode === "dungeon" && bl ? bl.fogNear  : 20;
+          const fogFar   = mode === "dungeon" && bl ? bl.fogFar   : 120;
+          return (
+            <>
+              <color attach="background" args={[fogColor]} />
+              <fog attach="fog" args={[fogColor, fogNear, fogFar]} />
+            </>
+          );
+        })()}
 
-        {mode === "dungeon" ? (
+        {mode === "dungeon" && dungeon ? (
+          <>
+            <ambientLight
+              color={BIOME_LIGHTING[dungeon.biome]?.ambientColor ?? "#5a586c"}
+              intensity={BIOME_LIGHTING[dungeon.biome]?.ambientIntensity ?? 1.1}
+            />
+            <Torch />
+          </>
+        ) : mode === "dungeon" ? (
           <>
             <ambientLight color="#5a586c" intensity={1.1} />
             <Torch />
@@ -281,6 +339,15 @@ export function App() {
               <Dungeon data={dungeon} />
               <ExitPortal pos={dungeon.exit} rot={dungeon.exitRot} />
               <Enemies key={`enemies-${dungeonSeed}`} spawns={dungeon.enemies} />
+              {dungeon.doors.map((door, i) => (
+                <Door
+                  key={i}
+                  x={door.x}
+                  z={door.z}
+                  rot={door.rot}
+                  wallColor={String(getWallAppearance(dungeon.wallType as WallBlockType).color)}
+                />
+              ))}
             </>
           ) : (
             <Overworld data={overworld} />
@@ -288,8 +355,9 @@ export function App() {
           <Player key={`${mode}-${dungeonSeed}-${returnId}`} spawn={spawn} />
         </Physics>
 
+        <DamageNumbers />
         <Sword onHit={onHit} onCrit={onCrit} />
-        <Interaction onLabel={setLabel} onEnter={onEnter} onExit={onExit} onCorpse={onCorpse} />
+        <Interaction onLabel={setLabel} onEnter={onEnter} onExit={onExit} onCorpse={onCorpse} onGather={onGather} onWell={onWell} onChest={onChest} />
 
         <PointerLockControls
           ref={controls as never}
@@ -308,6 +376,7 @@ export function App() {
         open={invOpen}
         onClose={closeInv}
         corpse={lootCorpse}
+        chest={lootChest}
         onHeal={onHeal}
         hp={hp}
         maxHp={maxHp()}
@@ -322,6 +391,7 @@ export function App() {
       {crit && <div className="hitmarker hitmarker--crit" />}
       {hurt && <div className="hurt" />}
       {label && <div className="prompt">{label}</div>}
+      {notification && <div className="notification">{notification}</div>}
       {/* Feedback de montée d'attribut */}
       {attrUp && (
         <div className="attr-up">
@@ -358,7 +428,7 @@ export function App() {
             <br />
             ZQSD / WASD : se déplacer • Souris : regarder
             <br />
-            Maj : courir • Échap : libérer la souris • E : interagir • Clic : épée
+            Maj : courir • Espace : sauter • Échap : libérer la souris • E : interagir • Clic : épée
           </p>
         </div>
       )}

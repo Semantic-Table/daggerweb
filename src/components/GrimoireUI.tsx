@@ -42,6 +42,7 @@ import {
   type CharacterProfile,
 } from "../combat/character";
 import type { CorpseHandle } from "../combat/corpseRegistry";
+import type { ChestHandle } from "../combat/chestRegistry";
 import type { ItemDef, WeaponDef, ArmorDef, ArmorSlot } from "../items/itemDefs";
 import type { OverworldData, Entrance } from "../gen/overworldGen";
 import { type EntranceKind } from "../gen/overworldGen";
@@ -75,6 +76,7 @@ function iconKind(item: ItemDef): IconKind {
       default: return "chestplate";
     }
   }
+  if (item.kind !== "weapon") return "bottle";
   if (item.category === "axe") return "axe";
   if (item.category === "unarmed") return "fist";
   return "sword";
@@ -148,6 +150,8 @@ interface Props {
   onClose: () => void;
   /** Cadavre en cours de fouille (null = menu seul). */
   corpse: CorpseHandle | null;
+  /** Coffre en cours de fouille (null = pas de coffre ouvert). */
+  chest: ChestHandle | null;
   onHeal: (amount: number) => void;
   hp: number;
   maxHp: number;
@@ -157,7 +161,7 @@ interface Props {
   returnId: number | null;
 }
 
-export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp, overworldData, dungeonName, mode, returnId }: Props) {
+export function GrimoireUI({ open, onClose, corpse, chest, onHeal, hp, maxHp, overworldData, dungeonName, mode, returnId }: Props) {
   const [, forceUpdate] = useReducer((n: number) => n + 1, 0);
   useEffect(() => subscribeInventory(forceUpdate), []);
   useEffect(() => subscribeSkills(forceUpdate), []);
@@ -186,10 +190,10 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp, overworld
   const [selSpell, setSelSpell] = useState("givre");
   const dragSlot = useRef<number | null>(null);
 
-  // Fouiller un cadavre ramène toujours sur la sacoche.
+  // Fouiller un cadavre ou ouvrir un coffre ramène toujours sur la sacoche.
   useEffect(() => {
-    if (corpse) setTab("inv");
-  }, [corpse]);
+    if (corpse || chest) setTab("inv");
+  }, [corpse, chest]);
 
   // Ferme sur Échap ou I.
   useEffect(() => {
@@ -296,9 +300,11 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp, overworld
   };
 
   const takeLoot = (item: ItemDef, lootIdx: number) => {
-    if (pickupItem(item) && corpse) {
-      corpse.loot.splice(lootIdx, 1);
-      if (corpse.loot.length === 0) corpse.markLooted();
+    const src = corpse ?? chest ?? null;
+    if (!src) return;
+    if (pickupItem(item)) {
+      src.loot.splice(lootIdx, 1);
+      if (src.loot.length === 0 && corpse) corpse.markLooted();
       forceUpdate();
     }
   };
@@ -383,30 +389,35 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp, overworld
 
               {/* col. centrale : grille / liste */}
               <div className="grim-col grim-col--grow">
-                {corpse && (
-                  <div className="grim-corpse">
-                    <div className="grim-corpse-head">
-                      CADAVRE · {corpse.loot.length ? "cliquez pour prendre" : "fouillé"}
+                {(corpse || chest) && (() => {
+                  const src = corpse ?? chest!;
+                  const label = corpse ? "CADAVRE" : "COFFRE";
+                  const emptyLabel = corpse ? "fouillé" : "vidé";
+                  return (
+                    <div className="grim-corpse">
+                      <div className="grim-corpse-head">
+                        {label} · {src.loot.length ? "cliquez pour prendre" : emptyLabel}
+                      </div>
+                      <div className="grim-corpse-row">
+                        {src.loot.length === 0 ? (
+                          <span className="grim-dim">Rien à prendre.</span>
+                        ) : (
+                          src.loot.map((item, i) => (
+                            <button
+                              key={i}
+                              className="grim-corpse-item"
+                              onClick={() => takeLoot(item, i)}
+                              title={`Prendre — ${item.name}`}
+                            >
+                              <span style={itemIcon(item, 18)} />
+                              <span className="grim-corpse-name">{item.name}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
                     </div>
-                    <div className="grim-corpse-row">
-                      {corpse.loot.length === 0 ? (
-                        <span className="grim-dim">Rien à prendre.</span>
-                      ) : (
-                        corpse.loot.map((item, i) => (
-                          <button
-                            key={i}
-                            className="grim-corpse-item"
-                            onClick={() => takeLoot(item, i)}
-                            title={`Prendre — ${item.name}`}
-                          >
-                            <span style={itemIcon(item, 18)} />
-                            <span className="grim-corpse-name">{item.name}</span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
                 <div className="grim-invhead">
                   <span className="grim-invtitle">SACOCHE · {getItemCount()} objets</span>
                   <div className="grim-minis">

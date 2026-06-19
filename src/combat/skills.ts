@@ -14,6 +14,9 @@ import {
   SKILL_DMG_PER_LEVEL,
   SKILL_SPEED_PER_LEVEL,
   SKILL_SPEED_FLOOR,
+  JUMP_BONUS_PER_LEVEL,
+  ATHLETICS_SPEED_PER_LEVEL,
+  ATHLETICS_STAMINA_PER_LEVEL,
 } from "../config";
 
 export type WeaponCategory = "blade" | "axe" | "unarmed";
@@ -111,4 +114,76 @@ export function effectiveDmg(weapon: WeaponDef): number {
 /** Durée de swing effective = base modulée par la compétence (plus court = plus rapide). */
 export function effectiveSwingDur(weapon: WeaponDef): number {
   return weapon.swingDur * skillBonus(weapon.category).speedMult;
+}
+
+// ============================================================================
+// Compétences de mouvement (Saut, Athlétisme) — à l'usage, Morrowind-style
+// ============================================================================
+
+export type MovementCategory = "jumping" | "athletics";
+
+export const MOVEMENT_CATEGORIES: MovementCategory[] = ["jumping", "athletics"];
+
+export const MOVEMENT_LABEL: Record<MovementCategory, string> = {
+  jumping: "Saut",
+  athletics: "Athlétisme",
+};
+
+export const MOVEMENT_GOV: Record<MovementCategory, string> = {
+  jumping: "AGI",
+  athletics: "END",
+};
+
+const movementState: Record<MovementCategory, SkillState> = {
+  jumping: { xp: 0 },
+  athletics: { xp: 0 },
+};
+
+const movementListeners = new Set<() => void>();
+
+export function getMovementSkills(): Record<MovementCategory, SkillState> {
+  return movementState;
+}
+
+export function subscribeMovementSkills(fn: () => void): () => void {
+  movementListeners.add(fn);
+  return () => movementListeners.delete(fn);
+}
+
+function notifyMovement() {
+  for (const fn of movementListeners) fn();
+}
+
+export function gainMovementXp(category: MovementCategory, amount: number): void {
+  movementState[category].xp += amount;
+  notifyMovement();
+}
+
+export interface MovementBonus {
+  level: number;
+  /** Multiplicateur de hauteur de saut (1 = base). */
+  jumpMult: number;
+  /** Multiplicateur de vitesse de sprint (1 = base). */
+  speedMult: number;
+  /** Multiplicateur du coût en endurance à la course (<1 = moins cher). */
+  staminaMult: number;
+}
+
+/** Bonus actifs d'une compétence de mouvement, dérivés de son niveau. */
+export function movementBonus(category: MovementCategory): MovementBonus {
+  const { level } = levelInfo(movementState[category].xp);
+  if (category === "jumping") {
+    return {
+      level,
+      jumpMult: 1 + JUMP_BONUS_PER_LEVEL * level,
+      speedMult: 1,
+      staminaMult: 1,
+    };
+  }
+  return {
+    level,
+    jumpMult: 1,
+    speedMult: 1 + ATHLETICS_SPEED_PER_LEVEL * level,
+    staminaMult: Math.max(0.2, 1 - ATHLETICS_STAMINA_PER_LEVEL * level),
+  };
 }

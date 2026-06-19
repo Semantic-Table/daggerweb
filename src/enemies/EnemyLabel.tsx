@@ -17,13 +17,17 @@ export function EnemyLabel({
   level,
   elite = false,
   y,
+  hpFraction = 1,
 }: {
   name: string;
   level: number;
   elite?: boolean;
   y: number;
+  hpFraction?: number;
 }) {
   const text = elite ? `Élite · ${name} — niv. ${level}` : `${name} — niv. ${level}`;
+  const pct = Math.max(0, Math.min(1, hpFraction)) * 100;
+  const barColor = pct > 50 ? "#c23a3a" : pct > 25 ? "#c07a34" : "#c2271a";
   return (
     <Html
       position={[0, y - 0.4, 0]}
@@ -33,6 +37,9 @@ export function EnemyLabel({
       wrapperClass="mob-label-wrap"
     >
       <div className={elite ? "mob-label elite" : "mob-label"}>{text}</div>
+      <div className="mob-hp-bar">
+        <div className="mob-hp-fill" style={{ width: `${pct}%`, background: barColor }} />
+      </div>
     </Html>
   );
 }

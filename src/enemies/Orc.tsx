@@ -56,7 +56,7 @@ export function Orc({ spawn, index, level, elite }: EnemyProps) {
   }, [skinColor]);
 
   const stats = useMemo(() => scaledStats(orcType, level), [level]);
-  const { looted, isDead } = useEnemyAI({
+  const { looted, isDead, hpFraction } = useEnemyAI({
     spawn,
     index,
     body,
@@ -323,7 +323,7 @@ export function Orc({ spawn, index, level, elite }: EnemyProps) {
           )}
         </group>
       </group>
-      {!isDead && <EnemyLabel name={orcType.name} level={level} elite={elite} y={orcType.height} />}
+      {!isDead && <EnemyLabel name={orcType.name} level={level} elite={elite} y={orcType.height} hpFraction={hpFraction} />}
     </RigidBody>
   );
 }

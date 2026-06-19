@@ -61,7 +61,7 @@ export function Wolf({ spawn, index, level, elite }: EnemyProps) {
   }, [furColor]);
 
   const stats = useMemo(() => scaledStats(wolfType, level), [level]);
-  const { looted, isDead } = useEnemyAI({
+  const { looted, isDead, hpFraction } = useEnemyAI({
     spawn,
     index,
     body,
@@ -281,7 +281,7 @@ export function Wolf({ spawn, index, level, elite }: EnemyProps) {
           )}
         </group>
       </group>
-      {!isDead && <EnemyLabel name={wolfType.name} level={level} elite={elite} y={wolfType.height} />}
+      {!isDead && <EnemyLabel name={wolfType.name} level={level} elite={elite} y={wolfType.height} hpFraction={hpFraction} />}
     </RigidBody>
   );
 }
