@@ -16,7 +16,9 @@ import { Sword } from "./components/Sword";
 import { Enemies } from "./components/Enemies";
 import { GrimoireUI } from "./components/GrimoireUI";
 import { DamageNumbers } from "./components/DamageNumbers";
+import { Projectiles } from "./components/Projectiles";
 import { setDamageHandler } from "./combat/playerCombat";
+import { setOnParry } from "./combat/playerDefense";
 import { getInventory, subscribeInventory, getArmorClass, pickupItem, removeItem } from "./combat/inventory";
 import { getSkills, subscribeSkills, levelInfo, skillBonus, CATEGORY_LABEL } from "./combat/skills";
 import { gameState } from "./combat/gameState";
@@ -60,6 +62,9 @@ export function App() {
   // Feedback pour les coups critiques
   const [crit, setCrit] = useState(false);
   const critTimer = useRef<ReturnType<typeof setTimeout>>();
+  // Feedback pour les parades réussies (clic droit dans la fenêtre)
+  const [parry, setParry] = useState(false);
+  const parryTimer = useRef<ReturnType<typeof setTimeout>>();
   const [notification, setNotification] = useState<string | null>(null);
   const notifTimer = useRef<ReturnType<typeof setTimeout>>();
   // Feedback pour les montées d'attribut
@@ -126,6 +131,16 @@ export function App() {
       hurtTimer.current = setTimeout(() => setHurt(false), 140);
     });
     return () => setDamageHandler(null);
+  }, []);
+
+  // Feedback de parade : flash bref quand une parade réussit (l'ennemi est stagger).
+  useEffect(() => {
+    setOnParry(() => {
+      setParry(true);
+      clearTimeout(parryTimer.current);
+      parryTimer.current = setTimeout(() => setParry(false), 220);
+    });
+    return () => setOnParry(null);
   }, []);
 
   // Mort : retour en surface, PV remis (la mort n'est pas un reset, cf. GDD §2).
@@ -353,6 +368,7 @@ export function App() {
             <Overworld data={overworld} />
           )}
           <Player key={`${mode}-${dungeonSeed}-${returnId}`} spawn={spawn} />
+          <Projectiles key={`proj-${mode}-${dungeonSeed}-${returnId}`} />
         </Physics>
 
         <DamageNumbers />
@@ -389,6 +405,7 @@ export function App() {
       <div className="crosshair" />
       {hitmark && <div className="hitmarker" />}
       {crit && <div className="hitmarker hitmarker--crit" />}
+      {parry && <div className="parry-flash" />}
       {hurt && <div className="hurt" />}
       {label && <div className="prompt">{label}</div>}
       {notification && <div className="notification">{notification}</div>}

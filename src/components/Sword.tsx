@@ -5,6 +5,7 @@ import { enemyRegistry } from "../combat/enemyRegistry";
 import { getInventory, subscribeInventory } from "../combat/inventory";
 import { gainXp, effectiveDmg, effectiveSwingDur } from "../combat/skills";
 import { gainAttrPractice, SKILL_GOV, meleeMult, critChance, useStamina } from "../combat/character";
+import { playerDefense, beginGuard, endGuard } from "../combat/playerDefense";
 import { SWORD_REACH, SWORD_FIST_REACH, SWORD_CONE, SKILL_XP_PER_HIT, ATTACK_STAMINA_COST } from "../config";
 
 // Arme corps-à-corps (cf. GDD §5). Le viewmodel est rendu comme ENFANT de la
@@ -43,6 +44,7 @@ export function Sword({ onHit, onCrit }: SwordProps) {
   const { camera, scene } = useThree();
   const inner = useRef<THREE.Group>(null);
   const swinging = useRef(false);
+  const guardAmt = useRef(0); // 0..1 lissé : interpolation vers la pose de garde
   const t = useRef(0);
   const tmp = useMemo(() => new THREE.Vector3(), []);
   const fwd = useMemo(() => new THREE.Vector3(), []);
@@ -63,7 +65,9 @@ export function Sword({ onHit, onCrit }: SwordProps) {
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (e.button !== 0 || document.pointerLockElement == null || swinging.current) return;
-      
+      // Pas d'attaque tant qu'on garde (clic droit) : garde et attaque s'excluent.
+      if (playerDefense.guarding) return;
+
       // Vérifier si on a assez de vigueur pour attaquer (coût = fraction de jauge)
       if (!useStamina(ATTACK_STAMINA_COST)) {
         // Pas assez de vigueur, ne pas attaquer
@@ -108,6 +112,31 @@ export function Sword({ onHit, onCrit }: SwordProps) {
     return () => removeEventListener("mousedown", onDown);
   }, [camera, onHit, fwd, tmp, toE]);
 
+  // Garde / parade (clic droit). L'ENFONCEMENT arme une fenêtre de parade
+  // (beginGuard) ; tant que le bouton reste pressé, on est en garde simple.
+  // resolveMeleeHit (côté ennemi, à la frappe) arbitre parade/bloc/touché.
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 2 || document.pointerLockElement == null) return;
+      beginGuard();
+    };
+    const onUp = (e: MouseEvent) => {
+      if (e.button !== 2) return;
+      endGuard();
+    };
+    // Empêche le menu contextuel du navigateur sur clic droit.
+    const onCtx = (e: Event) => e.preventDefault();
+    addEventListener("mousedown", onDown);
+    addEventListener("mouseup", onUp);
+    addEventListener("contextmenu", onCtx);
+    return () => {
+      removeEventListener("mousedown", onDown);
+      removeEventListener("mouseup", onUp);
+      removeEventListener("contextmenu", onCtx);
+      endGuard();
+    };
+  }, []);
+
   useFrame((_, dt) => {
     if (!inner.current) return;
     const weapon = equippedRef.current;
@@ -123,13 +152,23 @@ export function Sword({ onHit, onCrit }: SwordProps) {
     }
     const active = swinging.current ? Math.sin(t.current * Math.PI) : 0;
 
+    // Lissage de la pose de garde (montée/descente rapides, ~10/s).
+    const gt = playerDefense.guarding ? 1 : 0;
+    guardAmt.current += (gt - guardAmt.current) * Math.min(1, dt * 12);
+    const gd = guardAmt.current;
+
     if (isFists) {
       // Jab : le poing droit s'enfonce vers l'avant puis revient.
-      g.position.set(FIST.px, FIST.py, FIST.pz - active * 0.42);
-      g.rotation.set(0.15 - active * 0.3, -0.25, 0);
+      // Garde : poing ramené haut au centre (protection).
+      g.position.set(FIST.px - gd * 0.16, FIST.py + gd * 0.26, FIST.pz + gd * 0.14 - active * 0.42);
+      g.rotation.set(0.15 - active * 0.3 - gd * 0.5, -0.25 + gd * 0.3, gd * 0.4);
     } else {
-      // Swing : balayage diagonal de la lame.
-      g.rotation.set(VM.rx - active * 2.0, VM.ry + active * 0.6, VM.rz + active * 0.8);
+      // Swing : balayage diagonal de la lame. Garde : lame levée en travers.
+      g.rotation.set(
+        VM.rx - active * 2.0 + gd * 1.1,
+        VM.ry + active * 0.6 - gd * 0.5,
+        VM.rz + active * 0.8 + gd * 0.55,
+      );
     }
   });
 

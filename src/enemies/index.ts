@@ -11,11 +11,24 @@ export { Goblin };
 
 // Composants d'ennemis et leurs types
 import { Skeleton, skeletonEnemyType } from "./Skeleton";
+import { SkeletonArcher, skeletonArcherEnemyType } from "./SkeletonArcher";
 import { Slime, slimeEnemyType } from "./Slime";
 import { Orc, orcEnemyType } from "./Orc";
 import { Wolf, wolfEnemyType } from "./Wolf";
+import { Troll, trollEnemyType } from "./Troll";
+import { Spider, spiderEnemyType } from "./Spider";
+import { Necromancer, necromancerEnemyType } from "./Necromancer";
 
-export { Skeleton, skeletonEnemyType, Slime, slimeEnemyType, Orc, orcEnemyType, Wolf, wolfEnemyType };
+export {
+  Skeleton, skeletonEnemyType,
+  SkeletonArcher, skeletonArcherEnemyType,
+  Slime, slimeEnemyType,
+  Orc, orcEnemyType,
+  Wolf, wolfEnemyType,
+  Troll, trollEnemyType,
+  Spider, spiderEnemyType,
+  Necromancer, necromancerEnemyType,
+};
 
 // =============================================================================
 // UTILITAIRES - Sélection et génération d'ennemis
@@ -33,10 +46,13 @@ export function getEnemyComponent(typeId: string) {
   const components: Record<string, React.ComponentType<EnemyProps>> = {
     goblin: Goblin,
     skeleton: Skeleton,
+    skeletonArcher: SkeletonArcher,
     slime: Slime,
     orc: Orc,
     wolf: Wolf,
-    skeletonArcher: Skeleton, // réutilise le squelette en attendant un archer dédié
+    troll: Troll,
+    spider: Spider,
+    necromancer: Necromancer,
   };
 
   // Type non implémenté → on retombe sur le gobelin (jamais d'ennemi invisible).
@@ -48,7 +64,7 @@ export function getEnemyComponent(typeId: string) {
  * Retourne { typeId, Component, spawn }
  */
 export function createRandomEnemyForBiome(biome: string, spawn: [number, number], index: number) {
-  const type = getEnemyForBiome(biome, ["necromancer", "troll", "spider", "skeletonArcher"]); // Exclure les non-implémentés
+  const type = getEnemyForBiome(biome);
   const Component = getEnemyComponent(type.id);
   return { typeId: type.id, Component, spawn, index };
 }
@@ -57,7 +73,7 @@ export function createRandomEnemyForBiome(biome: string, spawn: [number, number]
  * Crée un ennemi aléatoire (tous biomes confondus)
  */
 export function createRandomEnemy(spawn: [number, number], index: number) {
-  const type = getRandomEnemyType(["necromancer", "troll", "spider", "skeletonArcher"]);
+  const type = getRandomEnemyType();
   const Component = getEnemyComponent(type.id);
   return { typeId: type.id, Component, spawn, index };
 }
@@ -70,9 +86,13 @@ export function createRandomEnemy(spawn: [number, number], index: number) {
 export const IMPLEMENTED_ENEMIES = [
   "goblin",
   "skeleton",
+  "skeletonArcher",
   "slime",
   "orc",
-  "wolf"
+  "wolf",
+  "troll",
+  "spider",
+  "necromancer",
 ] as const;
 
 export type ImplementedEnemyId = typeof IMPLEMENTED_ENEMIES[number];

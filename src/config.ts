@@ -8,6 +8,28 @@ export const PLAYER_EYE = 0.6;
 export const PLAYER_IFRAMES_MS = 600; // invincibilité après un coup (ms)
 
 // ============================================================================
+// Combat télégraphié (refonte ennemis — Phase 1, cf. docs/refonte-ennemis-plan.md)
+// ============================================================================
+// La cadence d'attaque ennemie n'est plus instantanée : WINDUP (anticipation
+// lisible) → STRIKE (la frappe) → RECOVERY (fenêtre vulnérable). Les dégâts ne
+// partent qu'à STRIKE, et seulement si le joueur est encore à portée → reculer
+// pendant le windup esquive RÉELLEMENT. Valeurs par défaut ; un type peut les
+// surcharger (cf. scaledStats, defaults par behavior).
+export const ENEMY_WINDUP = 0.45;   // durée d'anticipation par défaut (s)
+export const ENEMY_RECOVERY = 0.5;  // durée de récupération vulnérable (s)
+export const ENEMY_STAGGER = 1.1;   // durée du stagger déclenché par une parade (s)
+// Tolérance de portée au moment de la frappe : un peu de marge pour ne pas être
+// frame-perfect, mais assez serré pour que le recul paie.
+export const ENEMY_STRIKE_GRACE = 0.45;
+
+// Garde & parade du joueur (clic droit, cf. combat/playerDefense.ts)
+export const PARRY_WINDOW_MS = 240;       // fenêtre de parade au début de la garde
+export const GUARD_BLOCK_MULT = 0.25;     // fraction de dégâts subis en garde simple
+export const GUARD_FACING_DOT = 0.2;      // cône frontal (≈78°) requis pour bloquer/parer
+export const GUARD_BLOCK_STAMINA = 0.1;   // coût de vigueur d'un coup bloqué (fraction de jauge)
+export const GUARD_DRAIN = 0.05;          // vigueur/s drainée tant que la garde est maintenue
+
+// ============================================================================
 // Attributs (cf. docs/roadmap-attributs.md)
 // ============================================================================
 

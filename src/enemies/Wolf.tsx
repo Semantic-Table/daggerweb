@@ -1,66 +1,60 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { CapsuleCollider, RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { useEnemyAI, type EnemyProps } from "./useEnemyAI";
+import { telegraphGlow } from "./rig";
 import { EnemyLabel } from "./EnemyLabel";
 import { scaledStats } from "./scaling";
 import { ENEMY_TYPES } from "./enemyTypes";
 
-// Configuration spécifique au Loup
-const wolfType = ENEMY_TYPES.wolf;
+// Loup — refait de zéro (Phase 3), épuré. Quadrupède orienté tête sur +Z (l'axe
+// que useEnemyAI tourne vers le joueur), corps allongé sur Z, 4 pattes en groupes
+// qui pivotent à la hanche (gait diagonal), matériau fourrure PARTAGÉ pour que tout
+// le corps rougeoie au windup via telegraphGlow. Pas de fioritures : corps, tête
+// (museau + oreilles + yeux), 4 pattes, queue.
 
-// Stats de combat → scaledStats(type, level). On ne garde que le fixe (collider, masse).
+const wolfType = ENEMY_TYPES.wolf;
 const WOLF_MASS = wolfType.stats.mass;
 const WOLF_COLLIDER_RADIUS = wolfType.stats.colliderRadius;
 const WOLF_COLLIDER_HEIGHT = wolfType.stats.colliderHeight;
 
-// Couleurs du loup
 const PRIMARY_COLOR = new THREE.Color(wolfType.appearance.primaryColor as string);
 const SECONDARY_COLOR = new THREE.Color(wolfType.appearance.secondaryColor as string);
-const ACCENT_COLOR = new THREE.Color(wolfType.appearance.accentColor as string);
 const EYE_COLOR = new THREE.Color(wolfType.appearance.eyeColor as string);
 
 export function Wolf({ spawn, index, level, elite }: EnemyProps) {
   const body = useRef<RapierRigidBody>(null);
-  const mainMeshRef = useRef<THREE.Mesh>(null);
   const corpseGroup = useRef<THREE.Group>(null);
   const bodyRigRef = useRef<THREE.Group>(null);
-  const headRef = useRef<THREE.Mesh>(null);
-  const tailRef = useRef<THREE.Mesh>(null);
-  const leftLegFrontRef = useRef<THREE.Mesh>(null);
-  const rightLegFrontRef = useRef<THREE.Mesh>(null);
-  const leftLegBackRef = useRef<THREE.Mesh>(null);
-  const rightLegBackRef = useRef<THREE.Mesh>(null);
-  // Crocs : visibles seulement pendant l'attaque (toggle dans onAnimate).
-  const fangsRef = useRef<THREE.Group>(null);
+  const headRef = useRef<THREE.Group>(null);
+  const tailRef = useRef<THREE.Group>(null);
+  const flRef = useRef<THREE.Group>(null); // patte avant gauche
+  const frRef = useRef<THREE.Group>(null); // patte avant droite
+  const blRef = useRef<THREE.Group>(null); // patte arrière gauche
+  const brRef = useRef<THREE.Group>(null); // patte arrière droite
+  const flashRef = useRef(0);
 
-  // Variation visuelle
   const variant = useMemo(() => {
     let s = (Math.floor(Math.abs(spawn[0] * 131 + spawn[1] * 57)) % 9973) + 1;
     const r = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
-    return { 
-      scale: 0.9 + r() * 0.2, 
-      furTint: r(),
-      eyeGlow: r() * 3.0,
-      isAlpha: r() > 0.7, // 30% de chance d'être un loup alpha (plus grand)
-      tailPosition: r() * 0.2 - 0.1 // Variation de position de queue
-    };
+    return { scale: 0.9 + r() * 0.2, furTint: r(), isAlpha: r() > 0.7 };
   }, [spawn]);
 
-  // Couleurs calculées avec variation
-  const furColor = useMemo(() => {
-    return PRIMARY_COLOR.clone().lerp(SECONDARY_COLOR, variant.furTint);
-  }, [variant.furTint]);
-  
-  const darkFurColor = useMemo(() => {
-    return furColor.clone().multiplyScalar(0.6);
-  }, [furColor]);
-  
-  const bellyColor = useMemo(() => {
-    return furColor.clone().multiplyScalar(1.3).lerp(new THREE.Color("#e0e0e0"), 0.4);
-  }, [furColor]);
+  const baseFur = useMemo(() => PRIMARY_COLOR.clone().lerp(SECONDARY_COLOR, variant.furTint), [variant.furTint]);
+  const furMat = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: baseFur.clone(), emissive: baseFur.clone(), emissiveIntensity: 0, roughness: wolfType.appearance.roughness, flatShading: true }),
+    [baseFur],
+  );
+  const darkMat = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: baseFur.clone().multiplyScalar(0.55), roughness: wolfType.appearance.roughness, flatShading: true }),
+    [baseFur],
+  );
+  const eyeMat = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#000", emissive: EYE_COLOR.clone(), emissiveIntensity: 2.5, toneMapped: false }),
+    [],
+  );
 
-  const stats = useMemo(() => scaledStats(wolfType, level), [level]);
+  const stats = useMemo(() => scaledStats(wolfType, level, elite), [level, elite]);
   const { looted, isDead, hpFraction } = useEnemyAI({
     spawn,
     index,
@@ -70,10 +64,8 @@ export function Wolf({ spawn, index, level, elite }: EnemyProps) {
     knockback: { xz: 3, y: 1.0 },
     lootLevel: level + (wolfType.stats.lootTier - 1),
     onFlash: (f) => {
-      if (mainMeshRef.current) {
-        const m = mainMeshRef.current.material as THREE.MeshStandardMaterial;
-        m.emissiveIntensity = f;
-      }
+      flashRef.current = f;
+      furMat.emissiveIntensity = f; // décroît tout seul pendant la mort (onAnimate gelé)
     },
     // Chute sur le côté : bascule avant + fort roulis.
     onDeath: (g, e) => {
@@ -81,34 +73,33 @@ export function Wolf({ spawn, index, level, elite }: EnemyProps) {
       g.rotation.z = e * 0.8;
       g.position.y = -e * wolfType.animations.deathSquash;
     },
-    onAnimate: ({ ws, aa, phase }) => {
+    // Quadrupède : gait diagonal, le windup le RAMASSE (rein relevé) pour bondir,
+    // la frappe (aa) projette le corps + la tête vers l'avant.
+    onAnimate: ({ ws, aa, wind, flinch, phase }) => {
       if (bodyRigRef.current) {
-        bodyRigRef.current.position.y = ws * wolfType.animations.walkAmplitude * 1.5;
-        bodyRigRef.current.rotation.x = aa * wolfType.animations.attackLunge * 0.5;
+        bodyRigRef.current.position.y = ws * 0.05 + wind * 0.06 - flinch * 0.05;
+        bodyRigRef.current.rotation.x = aa * 0.4 - wind * 0.25 + flinch * 0.35;
       }
-      // Tête : regard haut/bas seulement (le corps gère la rotation latérale).
-      if (headRef.current) {
-        headRef.current.rotation.x = ws * 0.1 - aa * 0.3;
-        headRef.current.rotation.y = 0;
-        headRef.current.rotation.z = 0;
-      }
-      // Queue : remue quand il court.
-      if (tailRef.current) {
-        tailRef.current.rotation.x = Math.sin(phase * 2) * 0.3 + ws * 0.2;
-        tailRef.current.rotation.y = ws * 0.3;
-      }
-      if (leftLegFrontRef.current) leftLegFrontRef.current.rotation.x = -ws * 0.8 + aa * 0.3;
-      if (rightLegFrontRef.current) rightLegFrontRef.current.rotation.x = ws * 0.8 - aa * 0.3;
-      if (leftLegBackRef.current) leftLegBackRef.current.rotation.x = ws * 0.8 + aa * 0.2;
-      if (rightLegBackRef.current) rightLegBackRef.current.rotation.x = -ws * 0.8 - aa * 0.2;
-      // Crocs visibles pendant la morsure.
-      if (fangsRef.current) fangsRef.current.visible = aa > 0.01;
+      if (headRef.current) headRef.current.rotation.x = ws * 0.05 - aa * 0.35 + wind * 0.2;
+      // Queue relevée vers l'arrière, frétille à la course.
+      if (tailRef.current) tailRef.current.rotation.y = Math.sin(phase * 2) * 0.4 * (0.3 + Math.abs(ws));
+      // Foulée diagonale (avant-gauche & arrière-droite ensemble, etc.).
+      const s = ws * 0.8;
+      if (flRef.current) flRef.current.rotation.x = s + aa * 0.3;
+      if (frRef.current) frRef.current.rotation.x = -s + aa * 0.3;
+      if (blRef.current) blRef.current.rotation.x = -s;
+      if (brRef.current) brRef.current.rotation.x = s;
+      telegraphGlow(furMat, flashRef.current, wind, baseFur, 0);
     },
   });
 
-  const eyeGlow = looted ? 0 : variant.eyeGlow;
+  useEffect(() => {
+    const k = looted ? 0.4 : 1;
+    furMat.color.copy(baseFur).multiplyScalar(k);
+    darkMat.color.copy(baseFur).multiplyScalar(0.55 * k);
+    eyeMat.emissiveIntensity = looted ? 0 : 2.5;
+  }, [looted, baseFur, furMat, darkMat, eyeMat]);
 
-  // Taille ajustée pour les loups alpha
   const finalScale = variant.scale * wolfType.scale * (variant.isAlpha ? 1.15 : 1);
 
   return (
@@ -124,161 +115,64 @@ export function Wolf({ spawn, index, level, elite }: EnemyProps) {
       <CapsuleCollider args={[WOLF_COLLIDER_RADIUS, WOLF_COLLIDER_HEIGHT]} />
       <group ref={corpseGroup} scale={finalScale}>
         <group ref={bodyRigRef}>
-          {/* Corps principal */}
-          <mesh ref={mainMeshRef}>
-            <sphereGeometry args={[0.35, 12, 10]} />
-            <meshStandardMaterial 
-              color={furColor} 
-              roughness={wolfType.appearance.roughness} 
-              flatShading={wolfType.appearance.flatShading}
-              emissive={furColor}
-              emissiveIntensity={0}
-            />
+          {/* Corps allongé sur Z (avant = +Z). */}
+          <mesh rotation={[Math.PI / 2, 0, 0]} material={furMat}>
+            <capsuleGeometry args={[0.26, 0.5, 6, 10]} />
           </mesh>
 
-          {/* Dos plus foncé */}
-          <mesh position={[0, 0.1, -0.2]} rotation={[0.2, 0, 0]}>
-            <sphereGeometry args={[0.32, 10, 8]} />
-            <meshStandardMaterial color={darkFurColor} roughness={wolfType.appearance.roughness} flatShading />
-          </mesh>
-
-          {/* Ventre clair */}
-          <mesh position={[0, -0.2, 0.15]} rotation={[-0.1, 0, 0]}>
-            <sphereGeometry args={[0.28, 10, 8]} />
-            <meshStandardMaterial color={bellyColor} roughness={wolfType.appearance.roughness} flatShading />
-          </mesh>
-
-          {/* Tête - centrée sur Z=0 pour éviter la rotation latérale */}
-          <mesh ref={headRef} position={[0.35, 0.05, 0]}>
-            <sphereGeometry args={[0.25, 10, 8]} />
-            <meshStandardMaterial color={furColor} roughness={wolfType.appearance.roughness} flatShading />
-          </mesh>
-
-          {/* Museau */}
-          <mesh position={[0.5, -0.05, 0.05]}>
-            <coneGeometry args={[0.12, 0.25, 6]} />
-            <meshStandardMaterial color={darkFurColor} roughness={wolfType.appearance.roughness} flatShading />
-          </mesh>
-
-          {/* Nez noir */}
-          <mesh position={[0.58, -0.08, 0.08]}>
-            <sphereGeometry args={[0.04, 4, 4]} />
-            <meshStandardMaterial color="#000000" roughness={1} />
-          </mesh>
-
-          {/* Yeux */}
-          <mesh position={[0.45, 0.1, 0.1]}>
-            <sphereGeometry args={[0.05, 5, 4]} />
-            <meshStandardMaterial color={ACCENT_COLOR} roughness={1} flatShading />
-          </mesh>
-          <mesh position={[0.55, 0.1, 0.1]}>
-            <sphereGeometry args={[0.05, 5, 4]} />
-            <meshStandardMaterial color={ACCENT_COLOR} roughness={1} flatShading />
-          </mesh>
-
-          {/* Yeux émissifs */}
-          <mesh position={[0.45, 0.12, 0.12]}>
-            <sphereGeometry args={[0.025, 4, 4]} />
-            <meshStandardMaterial 
-              color="#000" 
-              emissive={EYE_COLOR} 
-              emissiveIntensity={eyeGlow} 
-              toneMapped={false}
-            />
-          </mesh>
-          <mesh position={[0.55, 0.12, 0.12]}>
-            <sphereGeometry args={[0.025, 4, 4]} />
-            <meshStandardMaterial 
-              color="#000" 
-              emissive={EYE_COLOR} 
-              emissiveIntensity={eyeGlow} 
-              toneMapped={false}
-            />
-          </mesh>
-
-          {/* Oreilles */}
-          <mesh position={[0.4, 0.25, 0.2]} rotation={[0, 0, -0.4]}>
-            <coneGeometry args={[0.07, 0.15, 3]} />
-            <meshStandardMaterial color={furColor} roughness={wolfType.appearance.roughness} flatShading />
-          </mesh>
-          <mesh position={[0.52, 0.25, 0.2]} rotation={[0, 0, 0.4]}>
-            <coneGeometry args={[0.07, 0.15, 3]} />
-            <meshStandardMaterial color={furColor} roughness={wolfType.appearance.roughness} flatShading />
-          </mesh>
-
-          {/* Intérieur des oreilles */}
-          <mesh position={[0.42, 0.2, 0.15]} rotation={[0, 0, -0.3]}>
-            <coneGeometry args={[0.04, 0.08, 2]} />
-            <meshStandardMaterial color={bellyColor} roughness={1} />
-          </mesh>
-          <mesh position={[0.5, 0.2, 0.15]} rotation={[0, 0, 0.3]}>
-            <coneGeometry args={[0.04, 0.08, 2]} />
-            <meshStandardMaterial color={bellyColor} roughness={1} />
-          </mesh>
-
-          {/* Queue */}
-          <mesh ref={tailRef} position={[-0.3, -0.1, -0.3 + variant.tailPosition]} rotation={[0.2, 0, 0]}>
-            <capsuleGeometry args={[0.05, 0.35, 4, 6]} />
-            <meshStandardMaterial color={furColor} roughness={wolfType.appearance.roughness} flatShading />
-          </mesh>
-
-          {/* Pattes avant */}
-          <mesh ref={leftLegFrontRef} position={[-0.1, -0.25, 0.1]}>
-            <capsuleGeometry args={[0.06, 0.35, 4, 6]} />
-            <meshStandardMaterial color={furColor} roughness={wolfType.appearance.roughness} flatShading />
-          </mesh>
-          <mesh ref={rightLegFrontRef} position={[-0.05, -0.25, 0.1]}>
-            <capsuleGeometry args={[0.06, 0.35, 4, 6]} />
-            <meshStandardMaterial color={furColor} roughness={wolfType.appearance.roughness} flatShading />
-          </mesh>
-
-          {/* Pattes arrière */}
-          <mesh ref={leftLegBackRef} position={[-0.2, -0.3, -0.2]}>
-            <capsuleGeometry args={[0.07, 0.4, 4, 6]} />
-            <meshStandardMaterial color={furColor} roughness={wolfType.appearance.roughness} flatShading />
-          </mesh>
-          <mesh ref={rightLegBackRef} position={[-0.15, -0.3, -0.2]}>
-            <capsuleGeometry args={[0.07, 0.4, 4, 6]} />
-            <meshStandardMaterial color={furColor} roughness={wolfType.appearance.roughness} flatShading />
-          </mesh>
-
-          {/* Griffes (sur les pattes avant) */}
-          <mesh position={[-0.08, -0.55, 0.1]} rotation={[0.5, 0, 0]}>
-            <coneGeometry args={[0.02, 0.08, 3]} />
-            <meshStandardMaterial color="#333333" metalness={0.3} />
-          </mesh>
-          <mesh position={[-0.03, -0.55, 0.1]} rotation={[0.5, 0, 0]}>
-            <coneGeometry args={[0.02, 0.08, 3]} />
-            <meshStandardMaterial color="#333333" metalness={0.3} />
-          </mesh>
-          <mesh position={[-0.1, -0.55, 0.1]} rotation={[0.5, 0, 0]}>
-            <coneGeometry args={[0.02, 0.08, 3]} />
-            <meshStandardMaterial color="#333333" metalness={0.3} />
-          </mesh>
-          <mesh position={[-0.05, -0.55, 0.1]} rotation={[0.5, 0, 0]}>
-            <coneGeometry args={[0.02, 0.08, 3]} />
-            <meshStandardMaterial color="#333333" metalness={0.3} />
-          </mesh>
-
-          {/* Crocs visibles quand il attaque (visibilité pilotée dans onAnimate) */}
-          <group ref={fangsRef} visible={false}>
-            <mesh position={[0.55, -0.05, 0.32]} rotation={[0.2, 0, 0]}>
-              <coneGeometry args={[0.015, 0.06, 3]} />
-              <meshStandardMaterial color="#e0e0e0" metalness={0.5} />
+          {/* Tête (groupe) à l'avant. */}
+          <group ref={headRef} position={[0, 0.12, 0.5]}>
+            <mesh material={furMat}>
+              <sphereGeometry args={[0.2, 8, 7]} />
             </mesh>
-            <mesh position={[0.55, -0.08, 0.32]} rotation={[-0.1, 0, 0]}>
-              <coneGeometry args={[0.015, 0.06, 3]} />
-              <meshStandardMaterial color="#e0e0e0" metalness={0.5} />
+            {/* Museau. */}
+            <mesh position={[0, -0.05, 0.18]} material={darkMat}>
+              <boxGeometry args={[0.14, 0.12, 0.18]} />
+            </mesh>
+            {/* Oreilles. */}
+            <mesh position={[-0.11, 0.18, -0.02]} rotation={[-0.2, 0, -0.2]} material={darkMat}>
+              <coneGeometry args={[0.07, 0.16, 4]} />
+            </mesh>
+            <mesh position={[0.11, 0.18, -0.02]} rotation={[-0.2, 0, 0.2]} material={darkMat}>
+              <coneGeometry args={[0.07, 0.16, 4]} />
+            </mesh>
+            {/* Yeux émissifs. */}
+            <mesh position={[-0.09, 0.04, 0.16]} material={eyeMat}>
+              <sphereGeometry args={[0.035, 5, 4]} />
+            </mesh>
+            <mesh position={[0.09, 0.04, 0.16]} material={eyeMat}>
+              <sphereGeometry args={[0.035, 5, 4]} />
             </mesh>
           </group>
 
-          {/* Collar pour les loups alpha */}
-          {variant.isAlpha && (
-            <mesh position={[0, -0.15, 0]} rotation={[0, 0, 0]}>
-              <torusGeometry args={[0.38, 0.02, 6, 10]} />
-              <meshStandardMaterial color="#886633" metalness={0.4} roughness={0.5} />
+          {/* Pattes (groupes : pivot à l'épaule/hanche), une capsule chacune. */}
+          <group ref={flRef} position={[-0.18, -0.12, 0.3]}>
+            <mesh position={[0, -0.2, 0]} material={darkMat}>
+              <capsuleGeometry args={[0.06, 0.3, 4, 6]} />
             </mesh>
-          )}
+          </group>
+          <group ref={frRef} position={[0.18, -0.12, 0.3]}>
+            <mesh position={[0, -0.2, 0]} material={darkMat}>
+              <capsuleGeometry args={[0.06, 0.3, 4, 6]} />
+            </mesh>
+          </group>
+          <group ref={blRef} position={[-0.18, -0.12, -0.3]}>
+            <mesh position={[0, -0.2, 0]} material={darkMat}>
+              <capsuleGeometry args={[0.06, 0.3, 4, 6]} />
+            </mesh>
+          </group>
+          <group ref={brRef} position={[0.18, -0.12, -0.3]}>
+            <mesh position={[0, -0.2, 0]} material={darkMat}>
+              <capsuleGeometry args={[0.06, 0.3, 4, 6]} />
+            </mesh>
+          </group>
+
+          {/* Queue (groupe au derrière, relevée). */}
+          <group ref={tailRef} position={[0, 0.1, -0.5]}>
+            <mesh position={[0, 0.05, -0.12]} rotation={[-0.9, 0, 0]} material={furMat}>
+              <capsuleGeometry args={[0.05, 0.3, 4, 6]} />
+            </mesh>
+          </group>
         </group>
       </group>
       {!isDead && <EnemyLabel name={wolfType.name} level={level} elite={elite} y={wolfType.height} hpFraction={hpFraction} />}

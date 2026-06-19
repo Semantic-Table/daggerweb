@@ -287,6 +287,21 @@ body {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
 }
 
+/* Parade réussie : anneau doré qui s'évase brièvement au centre. */
+@keyframes parry-pop {
+  0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+}
+.parry-flash {
+  position: fixed; top: 50%; left: 50%;
+  width: 46px; height: 46px;
+  border: 3px solid var(--gold);
+  border-radius: 50%;
+  z-index: 7; pointer-events: none;
+  box-shadow: 0 0 8px 2px rgba(214, 178, 92, 0.7), inset 0 0 6px rgba(214, 178, 92, 0.5);
+  animation: parry-pop 0.22s ease-out forwards;
+}
+
 /* Montée d'attribut : notification en haut à droite */
 .attr-up {
   position: fixed; top: 1.5rem; right: 1.5rem;

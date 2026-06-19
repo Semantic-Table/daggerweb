@@ -31,6 +31,10 @@ export interface EnemyStats {
   attackDamage: number; // Dégâts par attaque
   attackCooldown: number; // Temps entre les attaques (secondes)
   attackRange: number;  // Distance d'attaque
+  // Combat télégraphié (cf. docs/refonte-ennemis-plan.md). Optionnels : si absents,
+  // scaledStats() applique un défaut selon le `behavior` (cf. WINDUP_BY_BEHAVIOR).
+  windup?: number;      // anticipation visible avant la frappe (s)
+  recovery?: number;    // récupération vulnérable après la frappe (s)
   
   // Stats de mouvement
   speed: number;        // Vitesse de déplacement
@@ -125,6 +129,10 @@ export const ENEMY_TYPES: Record<string, EnemyType> = {
       attackDamage: 8,
       attackCooldown: 1.0,
       attackRange: 1.7,
+      // Télégraphe explicite (banc d'essai du combat lisible) : un poil plus long
+      // que le défaut « fast » pour que le windup et la fenêtre de parade se lisent.
+      windup: 0.4,
+      recovery: 0.45,
       speed: 1.8,
       stopDistance: 1.3,
       armor: 0.0,
@@ -472,15 +480,17 @@ export const ENEMY_TYPES: Record<string, EnemyType> = {
   necromancer: {
     id: "necromancer",
     name: "Nécromancien",
-    description: "Mage sombre qui invoque des squelettes pour combattre à sa place.",
+    description: "Mage sombre qui lance des éclairs d'énergie nécrotique à distance.",
     behavior: "ranged",
     stats: {
+      // Version « caster » (Phase 4) : projectile sombre plutôt que l'invocation
+      // (l'invocation runtime de squelettes est reportée — cf. plan Phase 5).
       hp: 6,
-      attackDamage: 0, // N'inflige pas de dégâts directement
-      attackCooldown: 5.0, // Temps entre les invocations
-      attackRange: 10.0,
+      attackDamage: 13,
+      attackCooldown: 2.6,
+      attackRange: 9.0,
       speed: 2.0,
-      stopDistance: 8.0,
+      stopDistance: 7.0,
       armor: 0.1,
       expValue: 100,
       lootTier: 5,
@@ -541,7 +551,7 @@ export function getEnemyForBiome(biome: string, exclude: string[] = []): EnemyTy
     forest: ["goblin", "wolf", "spider"],
     cave: ["goblin", "troll", "slime"],
     ruin: ["skeleton", "skeletonArcher", "necromancer"],
-    desert: ["wolf", "scorpion", "skeletonArcher"], // (scorpion à ajouter plus tard)
+    desert: ["wolf", "spider", "skeletonArcher"],
     ice: ["troll", "wolf", "skeleton"],
     temple: ["skeleton", "skeletonArcher", "necromancer", "goblin"],
     default: ["goblin", "skeleton", "wolf", "slime"],

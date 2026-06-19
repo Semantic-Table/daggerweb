@@ -74,7 +74,11 @@ const ENEMY_UNLOCKS: { id: string; level: number }[] = [
   { id: "wolf", level: 1 },
   { id: "slime", level: 2 },
   { id: "skeleton", level: 3 },
+  { id: "skeletonArcher", level: 4 },
   { id: "orc", level: 5 },
+  { id: "spider", level: 6 },
+  { id: "troll", level: 8 },
+  { id: "necromancer", level: 10 },
 ];
 
 export interface DungeonData {
