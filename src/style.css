@@ -157,7 +157,7 @@ body {
       rgba(0, 0, 0, 0.4) 8px, rgba(0, 0, 0, 0.4) 10px);
   background-blend-mode: multiply;
   box-shadow: inset 0 2px 0 rgba(255, 180, 180, 0.25);
-  transition: width 0.12s steps(6, end);
+  /* transition: width 0.12s steps(6, end); */
 }
 
 /* Barre de vigueur — sous les PV, même langage visuel (crans verticaux). */
@@ -179,7 +179,7 @@ body {
       rgba(0, 0, 0, 0.4) 8px, rgba(0, 0, 0, 0.4) 10px);
   background-blend-mode: multiply;
   box-shadow: inset 0 2px 0 rgba(210, 255, 180, 0.25);
-  transition: width 0.1s linear;
+  /* transition: width 0.1s linear; */
 }
 
 /* ── Compétence de l'arme équipée (au-dessus de la vie) ──────────────────*/
@@ -485,6 +485,13 @@ body {
   margin-top: auto; padding-top: 8px;
 }
 .grim-note--center { text-align: center; }
+.grim-reset-btn {
+  width: 100%; margin-top: 6px; padding: 6px 0;
+  background: transparent; border: 1px solid var(--frameD);
+  color: var(--inkDim); font-family: "Pixelify Sans", sans-serif; font-size: 14px;
+  cursor: pointer; opacity: .7;
+}
+.grim-reset-btn:hover { opacity: 1; color: var(--ink); border-color: var(--frameL); }
 .grim-empty { padding: 20px; text-align: center; font-size: 16px; color: var(--inkDim); }
 .grim-rule { height: 2px; background: var(--frameD); box-shadow: 0 1px 0 var(--frameL); }
 

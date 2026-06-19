@@ -37,6 +37,8 @@ import {
   SKILL_GOV,
   PROFILES,
   saveProfile,
+  applyProfile,
+  resetCharacter,
   type CharacterProfile,
 } from "../combat/character";
 import type { CorpseHandle } from "../combat/corpseRegistry";
@@ -172,9 +174,8 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp, overworld
   
   const chooseProfile = (profile: CharacterProfile) => {
     saveProfile(profile);
+    applyProfile(profile);
     setShowProfileSelect(false);
-    // Recharger la page pour appliquer le nouveau profil
-    window.location.reload();
   };
 
   const [tab, setTab] = useState<Tab>("inv");
@@ -622,7 +623,7 @@ export function GrimoireUI({ open, onClose, corpse, onHeal, hp, maxHp, overworld
           )}
 
           {/* ===== PERSONNAGE ===== */}
-          {tab === "stats" && <Stats hp={hp} maxHp={maxHp} />}
+          {tab === "stats" && <Stats hp={hp} maxHp={maxHp} onReset={() => { resetCharacter(); setShowProfileSelect(true); }} />}
 
           {/* ===== MAGIE ===== */}
           {tab === "magic" && <Magic sel={selSpell} onSelect={setSelSpell} />}
@@ -846,7 +847,7 @@ function Equip({
   );
 }
 
-function Stats({ hp, maxHp }: { hp: number; maxHp: number }) {
+function Stats({ hp, maxHp, onReset }: { hp: number; maxHp: number; onReset: () => void }) {
   // Valeurs des attributs (réelles, plus de placeholders)
   const attrs = ATTR_ABBR.map((abbr) => {
     const value = getAttr(abbr);
@@ -918,6 +919,13 @@ function Stats({ hp, maxHp }: { hp: number; maxHp: number }) {
         <Bar label="Vigueur" val={`${Math.floor(currentStamina())} / ${Math.floor(maxStamina())}`} pct={staminaPercent()} />
         <Bar label="Charge" val={`${Math.floor(getTotalWeight())} / ${Math.floor(carryMax())}`} pct={(getTotalWeight() / carryMax()) * 100} />
         <div className="grim-note">Attributs, magie ET vigueur réels !</div>
+        <div className="grim-rule" />
+        <button
+          className="grim-reset-btn"
+          onClick={onReset}
+        >
+          ↺ Réinitialiser le personnage
+        </button>
       </div>
     </div>
   );

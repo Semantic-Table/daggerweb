@@ -307,6 +307,28 @@ export function saveProfile(profile: CharacterProfile): void {
   }
 }
 
+/** Applique immédiatement les attributs d'un profil au personnage en cours. */
+export function applyProfile(profile: CharacterProfile): void {
+  Object.assign(state.attrs, PROFILES[profile].attrs);
+  notify();
+}
+
+/** Remet le personnage à zéro (attributs + pratique + vigueur) et efface la sauvegarde. */
+export function resetCharacter(): void {
+  const base = PROFILES.neutre.attrs;
+  Object.assign(state.attrs, base);
+  for (const attr of Object.keys(state.practice) as Attr[]) {
+    state.practice[attr] = 0;
+    lastAttrLevel[attr] = 0;
+  }
+  state.stamina = 1.0;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(PROFILE_KEY);
+  } catch { /* Ignorer */ }
+  notify();
+}
+
 // ============================================================================
 // Persistance (localStorage)
 // ============================================================================
